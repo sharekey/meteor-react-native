@@ -4,7 +4,7 @@ import Mongo from '../Mongo';
 import Meteor from '../Meteor.js';
 import ReactiveDict from '../ReactiveDict';
 
-const TOKEN_KEY = 'reactnativemeteor_usertoken';
+const TOKEN_KEY = 'Meteor.loginToken';
 const Users = new Mongo.Collection('users');
 
 /**
@@ -181,7 +181,7 @@ const User = {
   _timeout: 50,
   _isTokenLogin: false,
   _isCallingLogin: false,
-  _loginWithToken(value) {
+  _loginWithToken(value, callback) {
     if (!value) {
       Meteor.isVerbose &&
         console.info(
@@ -219,6 +219,8 @@ const User = {
         } else {
           User._handleLoginCallback(err, result);
         }
+
+        callback?.(err, result);
       });
     } else {
       Meteor.isVerbose && console.info('User._loginWithToken::: token is null');
