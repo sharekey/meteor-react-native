@@ -41,7 +41,7 @@ Once you have your testing app installed on a device, use the following test cas
 - Device with Internet Connection
 - Device that is Offline
 
-**Updates that interact with `AsyncStorage`, `NetInfo`, or `trackr`:**
+**Updates that interact with `NetInfo`, or `trackr`:**
 
 - Opening from background (device put in sleep mode for at least 60 seconds, then reopened)
 

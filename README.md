@@ -53,8 +53,9 @@ Connect your React Native app to your Meteor server, and take advantage of Meteo
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 
+- [Features](#features)
+- [Table of Contents](#table-of-contents)
 - [Installation](#installation)
-  - [Use a different async storage](#use-a-different-async-storage)
   - [Using Expo Secure Store](#using-expo-secure-store)
 - [Basic Usage](#basic-usage)
 - [Companion Packages](#companion-packages)
@@ -62,8 +63,16 @@ Connect your React Native app to your Meteor server, and take advantage of Meteo
 - [Using on Web](#using-on-web)
 - [Changelog](#changelog)
 - [Package Interface](#package-interface)
-  - [Usage of the package interface](#usage-of-the-package-interface)
   - [Differences from Meteor Core to Note:](#differences-from-meteor-core-to-note)
+- [Advanced topics](#advanced-topics)
+  - [Logging library internals](#logging-library-internals)
+    - [Data level events (high level)](#data-level-events-high-level)
+    - [DDP events (high-level)](#ddp-events-high-level)
+    - [Websocket events (low-level)](#websocket-events-low-level)
+    - [Raw Websocket (lowest-level)](#raw-websocket-lowest-level)
+    - [Minimongo (low-level)](#minimongo-low-level)
+  - [Send logs and errors to the server and external services](#send-logs-and-errors-to-the-server-and-external-services)
+    - [Accounts](#accounts)
 - [Showcase](#showcase)
 - [Contribution and maintenance](#contribution-and-maintenance)
 - [License](#license)
@@ -76,24 +85,6 @@ Connect your React Native app to your Meteor server, and take advantage of Meteo
 2. Confirm you have peer dependency `@react-native-community/netinfo` installed
 3. Confirm you have `@react-native-async-storage/async-storage@>=1.8.1` installed.
    If you are using Expo, or otherwise cannot use `@react-native-async-storage/async-storage`, read below
-
-### Use a different async storage
-
-This package uses `@react-native-async-storage/async-storage` by default.
-This may cause issues if you are using certain React Native versions, or if you are using Expo.
-To use a custom AsyncStorage implementation, pass it as an option in `Meteor.connect`:
-
-```javascript
-import { AsyncStorage } from 'react-native';
-
-// ...
-
-Meteor.connect('wss://myapp.meteor.com/websocket', { AsyncStorage });
-```
-
-If you are using the `AsyncStorage` API yourself, its important that you use the same version that MeteorRN is using, or issues could be caused due to the conflicting versions.
-
-Make sure you are using the same AsyncStorage you pass into Meteor (or `@react-native-async-storage/async-storage` if you aren't passing anything), or you can use [MeteorRN's package interface](#package-interface).
 
 ### Using Expo Secure Store
 
@@ -204,14 +195,6 @@ To ensure that MeteorRN companion packages use the same versions of external pac
 Currently, package interface returns an object with the following properties:
 
 - AsyncStorage
-
-### Usage of the package interface
-
-```js
-import Meteor from '@meteorrn/core';
-
-const { AsyncStorage } = Meteor.packageInterface();
-```
 
 ### Differences from Meteor Core to Note:
 
