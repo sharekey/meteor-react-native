@@ -5,7 +5,7 @@ import Tracker from './Tracker.js';
 
 Object.assign(Meteor, User);
 
-const { useTracker, withTracker, Mongo, packageInterface, ReactiveDict } =
+const { useTracker, withTracker, Mongo, ReactiveDict } =
   Meteor;
 
 export {
@@ -13,7 +13,6 @@ export {
   Accounts,
   withTracker,
   Mongo,
-  packageInterface,
   ReactiveDict,
   Tracker,
 };

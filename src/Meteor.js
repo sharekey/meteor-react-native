@@ -84,13 +84,6 @@ const Meteor = {
   reconnect() {
     Data.ddp && Data.ddp.connect();
   },
-  packageInterface: () => {
-    return {
-      AsyncStorage:
-        Data._options.AsyncStorage ||
-        require('@react-native-async-storage/async-storage').default,
-    };
-  },
   /**
    * Connect to a Meteor server using a given websocket endpoint.
    * The endpoint needs to start with `ws://` or `wss://`
