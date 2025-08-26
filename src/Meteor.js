@@ -255,7 +255,7 @@ const Meteor = {
         let observers = getObservers('changed', message.collection, document);
         observers.forEach((callback) => {
           try {
-            callback(document, oldDocument);
+            callback(document, oldDocument, message.fields);
           } catch (e) {
             console.error('Error in observe callback', e);
           }
@@ -280,7 +280,7 @@ const Meteor = {
         Data.db[message.collection].del(message.id);
         observers.forEach((callback) => {
           try {
-            callback(null, oldDocument);
+            callback(message.id, oldDocument);
           } catch (e) {
             console.error('Error in observe callback', e);
           }
