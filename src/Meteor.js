@@ -184,6 +184,10 @@ const Meteor = {
     });
 
     Data.ddp.on('added', (message) => {
+      if (this.isVerbose) {
+        console.info('DDP on added', message);
+      }
+
       if (!Data.db[message.collection]) {
         Data.db.addCollection(message.collection);
       }
@@ -204,6 +208,10 @@ const Meteor = {
     });
 
     Data.ddp.on('ready', (message) => {
+      if (this.isVerbose) {
+        console.info('DDP on ready', message);
+      }
+
       const idsMap = new Map();
       for (var i in Data.subscriptions) {
         const sub = Data.subscriptions[i];
@@ -221,6 +229,10 @@ const Meteor = {
     });
 
     Data.ddp.on('changed', (message) => {
+      if (this.isVerbose) {
+        console.info('DDP on changed', message);
+      }
+
       const unset = {};
       if (message.cleared) {
         message.cleared.forEach((field) => {
@@ -252,6 +264,10 @@ const Meteor = {
     });
 
     Data.ddp.on('removed', (message) => {
+      if (this.isVerbose) {
+        console.info('DDP on removed', message);
+      }
+
       if (Data.db[message.collection]) {
         const oldDocument = Data.db[message.collection].findOne({
           _id: message.id,
@@ -272,6 +288,10 @@ const Meteor = {
       }
     });
     Data.ddp.on('result', (message) => {
+      if (this.isVerbose) {
+        console.info('DDP on result', message);
+      }
+
       const call = Data.calls.find((call) => call.id == message.id);
       if (typeof call.callback == 'function')
         call.callback(message.error, message.result);
@@ -282,6 +302,10 @@ const Meteor = {
     });
 
     Data.ddp.on('nosub', (message) => {
+      if (this.isVerbose) {
+        console.info('DDP on nosub', message);
+      }
+
       if (this.removing[message.id]) {
         delete this.removing[message.id];
       }
