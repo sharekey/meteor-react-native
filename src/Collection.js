@@ -66,7 +66,19 @@ export function getObservers(type, collection, newDocument) {
 /** @private */
 const _registerObserver = (collection, cursor, callbacks) => {
   observers[collection] = observers[collection] || [];
-  observers[collection].push({ cursor, callbacks });
+  const entry = { cursor, callbacks };
+  observers[collection].push(entry);
+  return {
+    stop() {
+      const list = observers[collection];
+      if (!list) return;
+      const idx = list.indexOf(entry);
+      if (idx !== -1) list.splice(idx, 1);
+      if (list.length === 0) {
+        delete observers[collection];
+      }
+    },
+  };
 };
 
 /**
