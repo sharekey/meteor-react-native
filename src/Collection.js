@@ -26,21 +26,7 @@ export function getObservers(type, collection, newDocument) {
   if (observers[collection]) {
     observers[collection].forEach(({ cursor, callbacks }) => {
       if (callbacks[type]) {
-        if (type === 'removed') {
-          observersRet.push(callbacks['removed']);
-        } else if (
-          Data.db[collection].findOne({
-            $and: [{ _id: newDocument._id }, cursor._selector],
-          })
-        ) {
-          try {
-            observersRet.push(callbacks[type]);
-          } catch (e) {
-            console.error('Error in observe callback old', e);
-          }
-        } else {
-          // TODO what to do here?
-        }
+        observersRet.push(callbacks[type]);
       }
     });
   }
