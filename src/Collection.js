@@ -25,9 +25,21 @@ export function getObservers(type, collection, newDocument) {
   let observersRet = [];
   if (observers[collection]) {
     observers[collection].forEach(({ cursor, callbacks }) => {
-      if (callbacks[type]) {
-        observersRet.push(callbacks[type]);
+      const cb = callbacks[type];
+      if (!cb) return;
+
+      // For removals, always notify the dedicated 'removed' callback
+      // If there is no selector, notify unconditionally
+      if (type === 'removed' || !cursor._selector) {
+        observersRet.push(cb);
+        return;
       }
+
+      // Otherwise notify only if the new/changed document matches the selector
+      const matches = !!Data.db[collection].findOne({
+        $and: [{ _id: newDocument._id }, cursor._selector],
+      });
+      if (matches) observersRet.push(cb);
     });
   }
   // Find the observers related to the specific query
@@ -36,9 +48,12 @@ export function getObservers(type, collection, newDocument) {
     for (let i = 0; i < keys.length; i++) {
       observersByComp[collection][keys[i]].callbacks.forEach(
         ({ cursor, callback }) => {
-          let findRes = Data.db[collection].findOne({
-            $and: [{ _id: newDocument?._id }, cursor._selector],
-          });
+          let findRes = cursor._selector
+            ? Data.db[collection].findOne({
+                $and: [{ _id: newDocument?._id }, cursor._selector],
+              })
+            : true;
+
           if (findRes) {
             observersRet.push(callback);
           }
