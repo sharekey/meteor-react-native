@@ -158,7 +158,7 @@ class Cursor {
    * @see https://docs.meteor.com/api/collections.html#Mongo-Cursor-observe
    */
   observe(callbacks) {
-    _registerObserver(this._collection._collection.name, this, callbacks);
+    return _registerObserver(this._collection._collection.name, this, callbacks);
   }
 }
 
