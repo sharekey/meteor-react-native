@@ -134,9 +134,11 @@ const Meteor = {
     Data.ddp = ddp;
     this.ddp = ddp;
 
-    Data.ddp.on('connected', () => {
-      // Clear the collections of any stale data in case this is a reconnect
-      if (Data.db && Data.db.collections) {
+    Data.ddp.on('connected', (info) => {
+      const sessionReused = !!(info && info.sessionReused);
+
+      // Clear the collections of any stale data only if we did NOT reuse the session
+      if (!sessionReused && Data.db && Data.db.collections) {
         for (var collection in Data.db.collections) {
           if (!localCollections.includes(collection)) {
             // Dont clear data from local collections
@@ -146,11 +148,18 @@ const Meteor = {
       }
 
       if (this.isVerbose) {
-        console.info('Connected to DDP server.');
+        console.info(
+          sessionReused
+            ? 'Connected to DDP server (session resumed).'
+            : 'Connected to DDP server.'
+        );
       }
-      this._loadInitialUser().then(() => {
-        this._subscriptionsRestart();
-      });
+
+      if (!sessionReused) {
+        this._loadInitialUser().then(() => {
+          this._subscriptionsRestart();
+        });
+      }
       this._reactiveDict.set('connected', true);
       this.connected = true;
       Data.notify('change');
@@ -205,6 +214,12 @@ const Meteor = {
           console.error('Error in observe callback', e);
         }
       });
+    });
+
+    Data.ddp.on('error', (message) => {
+      if (this.isVerbose) {
+        console.error('DDP error', message);
+      }
     });
 
     Data.ddp.on('ready', (message) => {
