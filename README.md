@@ -97,7 +97,7 @@ import * as SecureStore from 'expo-secure-store';
 // ...
 
 Meteor.connect('wss://myapp.meteor.com/websocket', {
-  AsyncStorage: {
+  KeyStorage: {
     getItem: SecureStore.getItemAsync,
     setItem: SecureStore.setItemAsync,
     removeItem: SecureStore.deleteItemAsync,
@@ -172,16 +172,16 @@ For React Native <0.60.0 use [react-native-meteor](https://github.com/inProgress
 
 ## Using on Web
 
-While this package was designed with React Native in mind, it is also capable of running on web (using `react-dom`). This can be useful if you need a light-weight Meteor implementation, if you want to create a client app separate from your server codebase, etc. The only change required is providing an AsyncStorage implementation. Here is a simple example:
+While this package was designed with React Native in mind, it is also capable of running on web (using `react-dom`). This can be useful if you need a light-weight Meteor implementation, if you want to create a client app separate from your server codebase, etc. The only change required is providing an KeyStorage implementation. Here is a simple example:
 
 ```js
-const AsyncStorage = {
+const KeyStorage = {
     setItem:async (key, value) => window.localStorage.setItem(key, value),
     getItem:async (key) => window.localStorage.getItem(key)
     removeItem:async (key) => window.localStorage.removeItem(key)
 }
 
-Meteor.connect("wss://.../websock", {AsyncStorage});
+Meteor.connect("wss://.../websock", {KeyStorage});
 ```
 
 ## Changelog
@@ -190,11 +190,11 @@ The [GitHub Releases Tab](https://github.com/TheRealNate/meteor-react-native/rel
 
 ## Package Interface
 
-To ensure that MeteorRN companion packages use the same versions of external packages like AsyncStorage as the core,
+To ensure that MeteorRN companion packages use the same versions of external packages like KeyStorage as the core,
 `@meteorrn/core` provides a package interface, where companion packages can access certain packages.
 Currently, package interface returns an object with the following properties:
 
-- AsyncStorage
+- KeyStorage
 
 ### Differences from Meteor Core to Note:
 

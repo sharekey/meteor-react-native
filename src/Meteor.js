@@ -19,14 +19,13 @@ import ReactiveDict from './ReactiveDict';
  * @summary the main Object to interact with this library
  */
 const Meteor = {
-  isVerbose: false,
+  isVerbose: true,
+  // Default logger; can be overridden via options.logger in connect
+  logger: console.info,
 
   /**
    * Calling this enables extended internal logging to console
    */
-  enableVerbose() {
-    this.isVerbose = true;
-  },
   _reactiveDict: new ReactiveDict(),
   Random,
   Mongo,
@@ -92,13 +91,19 @@ const Meteor = {
    * @param endpoint {string} required, websocket of Meteor server to connect with
    * @param options {object=} optional options
    * @param options.suppressUrlErrors {boolean=} suppress error when websocket endpoint is invalid
-   * @param options.AsyncStorage {AsyncStorage=} suppress error when websocket endpoint is invalid
+   * @param options.KeyStorage {KeyStorage=} suppress error when websocket endpoint is invalid
    * @param options.reachabilityUrl {string=} a URL that is used by @react-native-community/netinfo to run a connection
    *   check using a 204 request
    */
   connect(endpoint, options) {
     if (!endpoint) endpoint = Data._endpoint;
     if (!options) options = Data._options;
+    if (options.isVerbose !== undefined) {
+      this.isVerbose = options.isVerbose;
+    }
+    if (options.logger !== undefined) {
+      this.logger = options.logger;
+    }
 
     if (
       (!endpoint.startsWith('ws') || !endpoint.endsWith('/websocket')) &&
@@ -109,17 +114,10 @@ const Meteor = {
       );
     }
 
-    if (!options.AsyncStorage) {
-      const AsyncStorage =
-        require('@react-native-async-storage/async-storage').default;
-
-      if (AsyncStorage) {
-        options.AsyncStorage = AsyncStorage;
-      } else {
-        throw new Error(
-          'No AsyncStorage detected. Import an AsyncStorage package and add to `options` in the Meteor.connect() method'
-        );
-      }
+    if (!options.KeyStorage) {
+      throw new Error(
+        'No Storage detected. Import an Storage package and add to `options` in the Meteor.connect() method'
+      );
     }
 
     Data._endpoint = endpoint;
@@ -193,9 +191,6 @@ const Meteor = {
     });
 
     Data.ddp.on('added', (message) => {
-      if (this.isVerbose) {
-        console.info('DDP on added', message);
-      }
 
       if (!Data.db[message.collection]) {
         Data.db.addCollection(message.collection);
@@ -223,9 +218,6 @@ const Meteor = {
     });
 
     Data.ddp.on('ready', (message) => {
-      if (this.isVerbose) {
-        console.info('DDP on ready', message);
-      }
 
       const idsMap = new Map();
       for (var i in Data.subscriptions) {
@@ -244,9 +236,6 @@ const Meteor = {
     });
 
     Data.ddp.on('changed', (message) => {
-      if (this.isVerbose) {
-        console.info('DDP on changed', message);
-      }
 
       const unset = {};
       if (message.cleared) {
@@ -279,9 +268,6 @@ const Meteor = {
     });
 
     Data.ddp.on('removed', (message) => {
-      if (this.isVerbose) {
-        console.info('DDP on removed', message);
-      }
 
       if (Data.db[message.collection]) {
         const oldDocument = Data.db[message.collection].findOne({
@@ -303,9 +289,6 @@ const Meteor = {
       }
     });
     Data.ddp.on('result', (message) => {
-      if (this.isVerbose) {
-        console.info('DDP on result', message);
-      }
 
       const call = Data.calls.find((call) => call.id == message.id);
       if (typeof call.callback == 'function')
@@ -317,9 +300,6 @@ const Meteor = {
     });
 
     Data.ddp.on('nosub', (message) => {
-      if (this.isVerbose) {
-        console.info('DDP on nosub', message);
-      }
 
       if (this.removing[message.id]) {
         delete this.removing[message.id];

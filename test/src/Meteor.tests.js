@@ -20,7 +20,7 @@ describe('Meteor - integration', function () {
         done(new Error('should not automatically call connect'));
       });
 
-      const AsyncStorage = {
+      const KeyStorage = {
         getItem: async () => {},
         setItem: async () => {},
         removeItem: async () => {},
@@ -28,7 +28,7 @@ describe('Meteor - integration', function () {
 
       const endpoint = `ws://localhost:3000/websocket`;
       Meteor.connect(endpoint, {
-        AsyncStorage,
+        KeyStorage,
         NetInfo: null,
         autoConnect: false,
       });
@@ -45,7 +45,7 @@ describe('Meteor - integration', function () {
       stub(DDP.prototype, 'on', () => {});
       stub(DDP.prototype, 'connect', done);
 
-      const AsyncStorage = {
+      const KeyStorage = {
         getItem: async () => {},
         setItem: async () => {},
         removeItem: async () => {},
@@ -53,7 +53,7 @@ describe('Meteor - integration', function () {
 
       const endpoint = `ws://localhost:3000/websocket`;
       Meteor.connect(endpoint, {
-        AsyncStorage,
+        KeyStorage,
         NetInfo: null,
       });
     });
@@ -70,7 +70,7 @@ describe('Meteor - integration', function () {
         }
       });
 
-      const AsyncStorage = {
+      const KeyStorage = {
         getItem: async () => {},
         setItem: async () => {},
         removeItem: async () => {},
@@ -86,7 +86,7 @@ describe('Meteor - integration', function () {
 
       const endpoint = `ws://localhost:3000/websocket`;
       Meteor.connect(endpoint, {
-        AsyncStorage,
+        KeyStorage,
         NetInfo,
         autoReconnect: true,
       });
