@@ -245,21 +245,22 @@ const Meteor = {
       }
 
       if (Data.db[message.collection]) {
-        const document = {
+        const partialUpdate = {
           _id: message.id,
           ...message.fields,
           ...unset,
         };
 
-        const oldDocument = Data.db[message.collection].findOne({
-          _id: message.id,
-        });
+        const collection = Data.db[message.collection];
+        const oldDocument = collection.findOne({ _id: message.id });
 
-        Data.db[message.collection].upsert(document);
-        let observers = getObservers('changed', message.collection, document);
+        collection.upsert(partialUpdate);
+        const newDocument = collection.findOne({ _id: message.id });
+
+        let observers = getObservers('changed', message.collection, newDocument);
         observers.forEach((callback) => {
           try {
-            callback(document, oldDocument, message.fields);
+            callback(newDocument, oldDocument, message.fields);
           } catch (e) {
             console.error('Error in observe callback', e);
           }
