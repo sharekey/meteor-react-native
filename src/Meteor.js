@@ -19,7 +19,7 @@ import ReactiveDict from './ReactiveDict';
  * @summary the main Object to interact with this library
  */
 const Meteor = {
-  isVerbose: true,
+  isVerbose: false,
   // Default logger; can be overridden via options.logger in connect
   logger: console.info,
 
