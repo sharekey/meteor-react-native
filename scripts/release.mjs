@@ -12,19 +12,23 @@ function runOut(cmd) {
 }
 
 function usage() {
-  console.log(`\nUsage:\n  npm run release -- <patch|minor|major|X.Y.Z> [--push] [--commit-all] [--tag-prefix v] [--force]\n\nExamples:\n  npm run release -- patch --push\n  npm run release -- 2.9.0 --push\n  npm run release -- minor --commit-all\n`);
+  console.log(`\nUsage:\n  npm run release -- <patch|minor|major|X.Y.Z> [--push] [--commit-all] [--tag-prefix v] [--force]\n  yarn release <patch|minor|major|X.Y.Z> [--push] [--commit-all] [--tag-prefix v] [--force]\n\nExamples:\n  npm run release -- patch --push\n  yarn release patch --push\n  yarn release 2.9.0 --push\n  yarn release minor --commit-all\n`);
 }
 
 function parseArgs(argv) {
   const args = { bump: null, push: false, commitAll: false, tagPrefix: 'v', force: false };
   const rest = [];
   for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (a === '--push') args.push = true;
-    else if (a === '--commit-all') args.commitAll = true;
-    else if (a === '--force') args.force = true;
-    else if (a === '--tag-prefix') args.tagPrefix = argv[++i];
-    else if (!args.bump) args.bump = a;
+    const raw = argv[i];
+    const a = String(raw);
+    const normalized = a.startsWith('--') ? a.slice(2) : a;
+    if (normalized === 'push') args.push = true;
+    else if (normalized === 'commit-all') args.commitAll = true;
+    else if (normalized === 'force') args.force = true;
+    else if (normalized.startsWith('tag-prefix=')) args.tagPrefix = normalized.split('=')[1] || args.tagPrefix;
+    else if (normalized === 'tag-prefix') args.tagPrefix = argv[++i];
+    else if (!args.bump && ['patch', 'minor', 'major'].includes(normalized)) args.bump = normalized;
+    else if (!args.bump) args.bump = normalized; // could be X.Y.Z or vX.Y.Z
     else rest.push(a);
   }
   if (!args.bump || rest.length) return null;
@@ -88,7 +92,8 @@ function updatePackageLock(lockPath, newVersion) {
   ensureClean(args.force || args.commitAll);
 
   let next;
-  if (isSemver(args.bump)) next = args.bump;
+  const bumpArg = args.bump.replace(/^v/, '');
+  if (isSemver(bumpArg)) next = bumpArg;
   else if (['major', 'minor', 'patch'].includes(args.bump)) next = bumpSemver(current, args.bump);
   else {
     console.error('Error: Provide bump type (patch|minor|major) or explicit version X.Y.Z');
@@ -121,4 +126,3 @@ function updatePackageLock(lockPath, newVersion) {
 
   console.log(`\nBumped ${current} -> ${next}\nCreated tag ${tag}\n`);
 })();
-
