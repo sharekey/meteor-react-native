@@ -279,7 +279,8 @@ describe('Tracker', function () {
       buf += 'c';
     });
 
-    let c4 = Tracker.autorun(function (c) {
+    let c4;
+    c4 = Tracker.autorun(function (c) {
       c4 = c;
       buf += 'b';
     });

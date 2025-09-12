@@ -12,7 +12,7 @@
     "build": "npm run clean && tsc -p tsconfig.json",
     "prepare": "npm run build",
     "release": "node scripts/release.mjs",
-    "test:coverage": "TS_NODE_PROJECT=tsconfig.esm.json TS_NODE_TRANSPILE_ONLY=1 nyc --reporter=html --reporter=text mocha --node-option loader=ts-node/esm --node-option experimental-specifier-resolution=node 'test/**/*tests.js'"
+    "test:coverage": "TS_NODE_TRANSPILE_ONLY=1 nyc --reporter=html --reporter=text mocha --node-option loader=ts-node/esm --node-option experimental-specifier-resolution=node 'test/**/*tests.js'"
   },
   "keywords": [
     "react-component",
