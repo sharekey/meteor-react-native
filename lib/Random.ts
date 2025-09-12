@@ -54,7 +54,11 @@ function hasSecureRandom(): boolean {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const nodeCrypto = require('crypto');
     if (typeof nodeCrypto.randomFillSync === 'function') return true;
-    if (nodeCrypto.webcrypto && typeof nodeCrypto.webcrypto.getRandomValues === 'function') return true;
+    if (
+      nodeCrypto.webcrypto &&
+      typeof nodeCrypto.webcrypto.getRandomValues === 'function'
+    )
+      return true;
   } catch (_) {
     // ignore
   }
@@ -119,7 +123,10 @@ function getRandomValuesSafe(buf: Uint8Array) {
     if (typeof nodeCrypto.randomFillSync === 'function') {
       return nodeCrypto.randomFillSync(buf);
     }
-    if (nodeCrypto.webcrypto && typeof nodeCrypto.webcrypto.getRandomValues === 'function') {
+    if (
+      nodeCrypto.webcrypto &&
+      typeof nodeCrypto.webcrypto.getRandomValues === 'function'
+    ) {
       return nodeCrypto.webcrypto.getRandomValues(buf);
     }
   } catch (_) {
