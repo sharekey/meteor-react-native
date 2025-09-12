@@ -17,14 +17,11 @@ const Random = {
       if (hasSecureRandom()) {
         isSecureRandomEndabled = true;
       } else {
-        // Fall back to non-crypto RNG so tests and non‑RN envs don't crash.
-        // We still generate unbiased IDs via rejection sampling over Math.random bytes.
-        // Consumers that need strong RNG should provide a crypto implementation.
-        // eslint-disable-next-line no-console
-        console.warn(
-          '@meteorrn/core: secure random generator not detected; falling back to non‑crypto RNG for Random.id().'
+        throw new Error(
+          '@meteorrn/core: secure random generator is not available.\n' +
+            '- In React Native, install and configure `react-native-quick-crypto` (preferred) or add `react-native-get-random-values`.\n' +
+            '- In Node, ensure `globalThis.crypto` or the `crypto` module is available.'
         );
-        isSecureRandomEndabled = true;
       }
     }
     if (!generators[count]) {

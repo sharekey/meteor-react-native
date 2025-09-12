@@ -2,6 +2,7 @@
 const babelRegister = require('@babel/register');
 babelRegister();
 
+// for more options see here https://github.com/mochajs/mocha/blob/master/example/config/.mocharc.yml
 module.exports = {
   recursive: true,
   reporter: 'spec',
@@ -9,5 +10,6 @@ module.exports = {
   slow: 20,
   timeout: 2000,
   ui: 'bdd',
-  require: ['ts-node/register/transpile-only', 'test/hooks/mockServer.cjs'],
+  require: ['ts-node/register/transpile-only', 'test/hooks/mockServer.js'],
 };
+
