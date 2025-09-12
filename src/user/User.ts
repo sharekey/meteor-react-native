@@ -5,7 +5,7 @@ import Meteor from '../Meteor';
 import ReactiveDict from '../ReactiveDict';
 import type { Collection } from '../Collection';
 
-type UserDoc = { _id: string } & Record<string, any>;
+type UserDoc<T> = { _id: string } & Record<string, any> & T;
 
 const TOKEN_KEY = 'Meteor.loginToken';
 const Users = new (Mongo as any).Collection('users') as Collection<UserDoc>;
@@ -20,7 +20,7 @@ const User = {
   users: Users,
   _reactiveDict: new ReactiveDict(),
 
-  user(): UserDoc | null {
+  user<T>(): UserDoc<T> | null {
     const user_id = this._reactiveDict.get('_userIdSaved');
     if (!user_id) return null;
     return Users.findOne(user_id) || null;
