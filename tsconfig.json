@@ -16,11 +16,6 @@
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true
   },
-  "include": [
-    "src/**/*",
-    "lib/**/*",
-    "helpers/**/*",
-    "global.d.ts"
-  ],
+  "include": ["src/**/*", "lib/**/*", "helpers/**/*", "global.d.ts"],
   "exclude": ["node_modules", "dist", "test", "docs"]
 }

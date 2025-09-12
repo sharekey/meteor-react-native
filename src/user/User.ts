@@ -179,7 +179,8 @@ const User = {
       this._isTokenLogin = false;
       Data.notify('onLogin');
     } else {
-      Meteor.isVerbose && console.info('User._handleLoginCallback::: error:', err);
+      Meteor.isVerbose &&
+        console.info('User._handleLoginCallback::: error:', err);
       if (this._isTokenLogin) {
         setTimeout(() => {
           if (User._userIdSaved) return;
@@ -228,7 +229,8 @@ const User = {
               'User._handleLoginCallback::: too many requests retrying:',
               err
             );
-          const time = (err as any).details?.timeToReset || (err as any).timeToReset;
+          const time =
+            (err as any).details?.timeToReset || (err as any).timeToReset;
           setTimeout(() => {
             if (User._userIdSaved) return;
             this._loadInitialUser();

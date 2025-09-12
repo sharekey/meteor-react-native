@@ -19,7 +19,7 @@ const Random = {
       } else {
         throw new Error(
           '@meteorrn/core: crypto.getRandomValues is not available.\n' +
-          'In React Native, add `import "react-native-get-random-values";` at the top of your entry file (index.js/ts).'
+            'In React Native, add `import "react-native-get-random-values";` at the top of your entry file (index.js/ts).'
         );
       }
     }
@@ -27,7 +27,7 @@ const Random = {
       generators[count] = makeGenerator(count);
     }
     return generators[count]!();
-  }
+  },
 };
 
 function hasSecureRandom(): boolean {

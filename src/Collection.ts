@@ -15,7 +15,9 @@ const observers: Record<string, any[]> = Object.create(null);
  * @private
  * @type {object}
  */
-const observersByComp: Record<string, Record<string, any>> = Object.create(null);
+const observersByComp: Record<string, Record<string, any>> = Object.create(
+  null
+);
 /**
  * Get the list of callbacks for changes on a collection
  * @param {string} type - Type of change happening.
@@ -141,7 +143,7 @@ class Cursor<T = any> {
 
   /**
    * Call callback once for each matching document, sequentially and synchronously.
-  * @param callback {function}
+   * @param callback {function}
    *     Function to call. It will be called with three arguments: the document, a 0-based index, and cursor itself.
    */
   forEach(callback: (doc: T, index: number, cursor: this) => void) {
@@ -176,7 +178,11 @@ class Cursor<T = any> {
    * @see https://docs.meteor.com/api/collections.html#Mongo-Cursor-observe
    */
   observe(callbacks: Record<'added' | 'changed' | 'removed', Function>) {
-    return _registerObserver(this._collection._collection.name, this, callbacks);
+    return _registerObserver(
+      this._collection._collection.name,
+      this,
+      callbacks
+    );
   }
 }
 
@@ -212,7 +218,10 @@ export class Collection<TDoc = any> {
   _name!: string;
   _transform: ((doc: TDoc) => TDoc) | null = null;
 
-  constructor(name: string | null, options: { transform?: (doc: TDoc) => TDoc } = {}) {
+  constructor(
+    name: string | null,
+    options: { transform?: (doc: TDoc) => TDoc } = {}
+  ) {
     if (name === null) {
       this.localCollection = true;
       name = Random.id();
@@ -317,7 +326,10 @@ export class Collection<TDoc = any> {
    * @param options
    * @returns {Cursor}
    */
-  findOne(selector: string | Record<string, any>, options?: any): TDoc | undefined {
+  findOne(
+    selector: string | Record<string, any>,
+    options?: any
+  ): TDoc | undefined {
     let result = this.find(selector, options);
 
     if (result) {

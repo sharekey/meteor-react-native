@@ -21,7 +21,10 @@ class AccountsPassword {
    * @param callback optional callback that is invoked with one optional error argument
    */
   createUser = (
-    options: { username?: string; email?: string; password: string } & Record<string, any>,
+    options: { username?: string; email?: string; password: string } & Record<
+      string,
+      any
+    >,
     callback: (err?: any) => void = () => {}
   ) => {
     // Replace password with the hashed password.
@@ -92,15 +95,25 @@ class AccountsPassword {
       return callback('Must pass a new password');
     }
 
-    call('resetPassword', token, hashPassword(newPassword), (err: any, result: any) => {
-      Meteor.isVerbose &&
-        console.info('Accounts.resetPassword::: err:', err, 'result:', result);
-      if (!err) {
-        User._loginWithToken(result.token);
-      }
+    call(
+      'resetPassword',
+      token,
+      hashPassword(newPassword),
+      (err: any, result: any) => {
+        Meteor.isVerbose &&
+          console.info(
+            'Accounts.resetPassword::: err:',
+            err,
+            'result:',
+            result
+          );
+        if (!err) {
+          User._loginWithToken(result.token);
+        }
 
-      callback(err);
-    });
+        callback(err);
+      }
+    );
   };
 
   /**
@@ -125,10 +138,11 @@ class AccountsPassword {
   /**
    * Verify if the logged user has 2FA enabled
    */
-  has2faEnabled = (callback: (err?: any, enabled?: boolean) => void = () => {}) => {
+  has2faEnabled = (
+    callback: (err?: any, enabled?: boolean) => void = () => {}
+  ) => {
     call('has2faEnabled', callback);
   };
 }
 
 export default new AccountsPassword();
-

@@ -20,7 +20,9 @@ import useTracker from './useTracker';
  * @returns {function(React.Component):React.NamedExoticComponent}
  */
 export default function withTracker<TProps = any>(
-  options: ((props: TProps) => Record<string, any>) | { getMeteorData: (props: TProps) => Record<string, any>; pure?: boolean }
+  options:
+    | ((props: TProps) => Record<string, any>)
+    | { getMeteorData: (props: TProps) => Record<string, any>; pure?: boolean }
 ) {
   return (Component: any) => {
     const expandedOptions =

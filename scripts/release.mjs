@@ -12,11 +12,19 @@ function runOut(cmd) {
 }
 
 function usage() {
-  console.log(`\nUsage:\n  npm run release -- <patch|minor|major|X.Y.Z> [--push] [--commit-all] [--tag-prefix v] [--force]\n  yarn release <patch|minor|major|X.Y.Z> [--push] [--commit-all] [--tag-prefix v] [--force]\n\nExamples:\n  npm run release -- patch --push\n  yarn release patch --push\n  yarn release 2.9.0 --push\n  yarn release minor --commit-all\n`);
+  console.log(
+    `\nUsage:\n  npm run release -- <patch|minor|major|X.Y.Z> [--push] [--commit-all] [--tag-prefix v] [--force]\n  yarn release <patch|minor|major|X.Y.Z> [--push] [--commit-all] [--tag-prefix v] [--force]\n\nExamples:\n  npm run release -- patch --push\n  yarn release patch --push\n  yarn release 2.9.0 --push\n  yarn release minor --commit-all\n`
+  );
 }
 
 function parseArgs(argv) {
-  const args = { bump: null, push: false, commitAll: false, tagPrefix: 'v', force: false };
+  const args = {
+    bump: null,
+    push: false,
+    commitAll: false,
+    tagPrefix: 'v',
+    force: false,
+  };
   const rest = [];
   for (let i = 0; i < argv.length; i++) {
     const raw = argv[i];
@@ -25,9 +33,11 @@ function parseArgs(argv) {
     if (normalized === 'push') args.push = true;
     else if (normalized === 'commit-all') args.commitAll = true;
     else if (normalized === 'force') args.force = true;
-    else if (normalized.startsWith('tag-prefix=')) args.tagPrefix = normalized.split('=')[1] || args.tagPrefix;
+    else if (normalized.startsWith('tag-prefix='))
+      args.tagPrefix = normalized.split('=')[1] || args.tagPrefix;
     else if (normalized === 'tag-prefix') args.tagPrefix = argv[++i];
-    else if (!args.bump && ['patch', 'minor', 'major'].includes(normalized)) args.bump = normalized;
+    else if (!args.bump && ['patch', 'minor', 'major'].includes(normalized))
+      args.bump = normalized;
     else if (!args.bump) args.bump = normalized; // could be X.Y.Z or vX.Y.Z
     else rest.push(a);
   }
@@ -42,11 +52,21 @@ function isSemver(v) {
 function bumpSemver(cur, bump) {
   const m = cur.match(/^(\d+)\.(\d+)\.(\d+)(?:-.+)?$/);
   if (!m) throw new Error(`Invalid current version in package.json: ${cur}`);
-  let [major, minor, patch] = [parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3], 10)];
-  if (bump === 'major') { major++; minor = 0; patch = 0; }
-  else if (bump === 'minor') { minor++; patch = 0; }
-  else if (bump === 'patch') { patch++; }
-  else throw new Error(`Unsupported bump: ${bump}`);
+  let [major, minor, patch] = [
+    parseInt(m[1], 10),
+    parseInt(m[2], 10),
+    parseInt(m[3], 10),
+  ];
+  if (bump === 'major') {
+    major++;
+    minor = 0;
+    patch = 0;
+  } else if (bump === 'minor') {
+    minor++;
+    patch = 0;
+  } else if (bump === 'patch') {
+    patch++;
+  } else throw new Error(`Unsupported bump: ${bump}`);
   return `${major}.${minor}.${patch}`;
 }
 
@@ -61,7 +81,9 @@ function ensureClean(force) {
   if (force) return;
   const status = runOut('git status --porcelain').trim();
   if (status) {
-    console.error('\nError: Working tree is not clean. Commit or stash changes, or pass --force/--commit-all.');
+    console.error(
+      '\nError: Working tree is not clean. Commit or stash changes, or pass --force/--commit-all.'
+    );
     process.exit(1);
   }
 }
@@ -94,9 +116,12 @@ function updatePackageLock(lockPath, newVersion) {
   let next;
   const bumpArg = args.bump.replace(/^v/, '');
   if (isSemver(bumpArg)) next = bumpArg;
-  else if (['major', 'minor', 'patch'].includes(args.bump)) next = bumpSemver(current, args.bump);
+  else if (['major', 'minor', 'patch'].includes(args.bump))
+    next = bumpSemver(current, args.bump);
   else {
-    console.error('Error: Provide bump type (patch|minor|major) or explicit version X.Y.Z');
+    console.error(
+      'Error: Provide bump type (patch|minor|major) or explicit version X.Y.Z'
+    );
     process.exit(1);
   }
 
@@ -108,7 +133,11 @@ function updatePackageLock(lockPath, newVersion) {
   // Stage files
   if (args.commitAll) run('git add -A');
   else {
-    run(`git add ${JSON.stringify(pkgPath)}${existsSync(lockPath) ? ' ' + JSON.stringify(lockPath) : ''}`);
+    run(
+      `git add ${JSON.stringify(pkgPath)}${
+        existsSync(lockPath) ? ' ' + JSON.stringify(lockPath) : ''
+      }`
+    );
   }
 
   const tag = `${args.tagPrefix}${next}`;
@@ -120,7 +149,9 @@ function updatePackageLock(lockPath, newVersion) {
     try {
       run('git push --follow-tags');
     } catch (e) {
-      console.error('Warning: git push failed. You may need to set upstream and push manually.');
+      console.error(
+        'Warning: git push failed. You may need to set upstream and push manually.'
+      );
     }
   }
 

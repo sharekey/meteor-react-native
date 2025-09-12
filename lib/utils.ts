@@ -15,7 +15,10 @@ export function uniqueId(): string {
  * @param password
  * @returns {{digest: string, algorithm: string}}
  */
-export function hashPassword(password: string): { digest: string; algorithm: string } {
+export function hashPassword(password: string): {
+  digest: string;
+  algorithm: string;
+} {
   // XXX: we should extract this function in a way to let clients inject
   // it, so they can leverage react-native crypto packages that
   // implement a secure hashing algorithm like bcrypt

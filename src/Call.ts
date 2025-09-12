@@ -13,7 +13,8 @@ export default function call(eventName: string, ...rest: unknown[]): void {
   }
 
   const ddp = Data.ddp;
-  if (!ddp) throw new Error('DDP is not initialized. Call Meteor.connect() first.');
+  if (!ddp)
+    throw new Error('DDP is not initialized. Call Meteor.connect() first.');
   const id = ddp.method(eventName, args);
   const entry: any = { id };
   if (callback) entry.callback = callback;

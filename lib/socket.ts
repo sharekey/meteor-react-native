@@ -43,7 +43,10 @@ export default class Socket extends EventEmitter<SocketEventMap> {
   private rawSocket: any;
   private closing?: boolean;
 
-  constructor(SocketConstructor: new (endpoint: string) => any, endpoint: string) {
+  constructor(
+    SocketConstructor: new (endpoint: string) => any,
+    endpoint: string
+  ) {
     super();
     this.SocketConstructor = SocketConstructor;
     this.endpoint = endpoint;
@@ -126,7 +129,7 @@ export default class Socket extends EventEmitter<SocketEventMap> {
         isRaw: true,
         type: 'websocket_error',
         message:
-          (event && (event.message || event.reason))
+          event && (event.message || event.reason)
             ? String(event.message || event.reason)
             : 'WebSocket error',
       };

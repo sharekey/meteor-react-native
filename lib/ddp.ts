@@ -38,10 +38,26 @@ type DDPConnectedMessage = { msg: 'connected'; session: string };
 type DDPPingMessage = { msg: 'ping'; id?: string };
 type DDPReadyMessage = { msg: 'ready'; subs: string[] };
 type DDPNoSubMessage = { msg: 'nosub'; id: string; error?: any };
-type DDPAddedMessage = { msg: 'added'; collection: string; id: string; fields?: any };
-type DDPChangedMessage = { msg: 'changed'; collection: string; id: string; fields?: any; cleared?: string[] };
+type DDPAddedMessage = {
+  msg: 'added';
+  collection: string;
+  id: string;
+  fields?: any;
+};
+type DDPChangedMessage = {
+  msg: 'changed';
+  collection: string;
+  id: string;
+  fields?: any;
+  cleared?: string[];
+};
 type DDPRemovedMessage = { msg: 'removed'; collection: string; id: string };
-type DDPResultMessage = { msg: 'result'; id: string; result?: any; error?: any };
+type DDPResultMessage = {
+  msg: 'result';
+  id: string;
+  result?: any;
+  error?: any;
+};
 type DDPUpdatedMessage = { msg: 'updated'; methods: string[] };
 type DDPErrorMessage = { msg: 'error'; [k: string]: any };
 type DDPInbound =
@@ -82,7 +98,9 @@ const DEFAULT_RECONNECT_INTERVAL = 5000;
  * @private
  */
 class EventInterface {
-  listeners: { [K in keyof DDPEventMap]: Record<string, (event: DDPEventMap[K]) => void> };
+  listeners: {
+    [K in keyof DDPEventMap]: Record<string, (event: DDPEventMap[K]) => void>;
+  };
   ddp!: DDP;
   constructor() {
     this.listeners = Object.create(null);
@@ -113,7 +131,10 @@ class EventInterface {
    * @param event {object} the actual event to pass to the callbacks
    * @private
    */
-  _handleEvent<E extends keyof DDPEventMap>(eventName: E, event: DDPEventMap[E]) {
+  _handleEvent<E extends keyof DDPEventMap>(
+    eventName: E,
+    event: DDPEventMap[E]
+  ) {
     for (let func of Object.values((this.listeners as any)[eventName])) {
       try {
         (func as any)(event);
@@ -128,7 +149,10 @@ class EventInterface {
     }
   }
 
-  on<E extends keyof DDPEventMap>(eventName: E, func: (event: DDPEventMap[E]) => void) {
+  on<E extends keyof DDPEventMap>(
+    eventName: E,
+    func: (event: DDPEventMap[E]) => void
+  ) {
     // TODO check params
     const id = Math.random() + '';
     if (!(this.listeners as any)[eventName])
@@ -218,17 +242,17 @@ class DDP extends EventEmitter<DDPEventMap> {
     this.socket = new Socket(options.SocketConstructor, options.endpoint);
 
     if (this.isVerbose) {
-        this.socket.on('message:out', (outMessage) => {
-          try {
-              const copy = { SEND: 'SEND', ...outMessage };
-              if (this.isPrivate && copy.params !== undefined) {
-                delete copy.params;
-              }
-              this.logger(copy);
-          } catch (e) {
-            // no-op
+      this.socket.on('message:out', (outMessage) => {
+        try {
+          const copy = { SEND: 'SEND', ...outMessage };
+          if (this.isPrivate && copy.params !== undefined) {
+            delete copy.params;
           }
-        });
+          this.logger(copy);
+        } catch (e) {
+          // no-op
+        }
+      });
     }
 
     this.socket.on('open', () => {
@@ -266,9 +290,14 @@ class DDP extends EventEmitter<DDPEventMap> {
         this._lastSessionId = message.session;
         const sessionReused =
           !!previousSessionId && previousSessionId === message.session;
-        this.isVerbose && this.logger(
-          `${sessionReused ? 'reused' : 'new'} session established. OLD: ${previousSessionId}, NEW: ${message.session}`
-        );
+        this.isVerbose &&
+          this.logger(
+            `${
+              sessionReused ? 'reused' : 'new'
+            } session established. OLD: ${previousSessionId}, NEW: ${
+              message.session
+            }`
+          );
 
         this.messageQueue.process();
 
@@ -280,7 +309,11 @@ class DDP extends EventEmitter<DDPEventMap> {
         this.socket.send({ msg: 'pong', id: (message as any).id });
       } else if (PUBLIC_EVENTS.includes(message.msg as any)) {
         if (this.isVerbose) {
-          if (message.msg === 'ready' || message.msg === 'nosub' || message.msg === 'error') {
+          if (
+            message.msg === 'ready' ||
+            message.msg === 'nosub' ||
+            message.msg === 'error'
+          ) {
             this.logger(message);
           } else if (message.msg === 'result') {
             if (this.isPrivate) {
@@ -290,16 +323,25 @@ class DDP extends EventEmitter<DDPEventMap> {
             } else {
               this.logger(message);
             }
-          } else if (message.msg === 'added' || message.msg === 'changed' || message.msg === 'removed') {
-            this.logger(this.isPrivate
-              ? { msg: message.msg, collection: message.collection, id: message.id }
-              : message
+          } else if (
+            message.msg === 'added' ||
+            message.msg === 'changed' ||
+            message.msg === 'removed'
+          ) {
+            this.logger(
+              this.isPrivate
+                ? {
+                    msg: message.msg,
+                    collection: message.collection,
+                    id: message.id,
+                  }
+                : message
             );
           } else {
             this.logger(message);
           }
         }
-        
+
         this.emit(message.msg as any, message as any);
       } else {
         const error = new Error(`Unexpected message received`);
@@ -327,7 +369,10 @@ class DDP extends EventEmitter<DDPEventMap> {
    * Emits a new event.
    * @override
    */
-  emit<E extends keyof DDPEventMap>(event: E, payload?: DDPEventMap[E]): boolean {
+  emit<E extends keyof DDPEventMap>(
+    event: E,
+    payload?: DDPEventMap[E]
+  ): boolean {
     Promise.resolve().then(() => super.emit(event, payload as any));
     return true;
   }

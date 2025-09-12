@@ -102,7 +102,8 @@ const Meteor: MeteorBase = {
   /** Ensure DDP instance is available before using it */
   requireDdp(): DDP {
     const ddp = Data.ddp as DDP | null;
-    if (!ddp) throw new Error('DDP is not initialized. Call Meteor.connect() first.');
+    if (!ddp)
+      throw new Error('DDP is not initialized. Call Meteor.connect() first.');
     return ddp;
   },
   _subscriptionsRestart() {
@@ -223,7 +224,10 @@ const Meteor: MeteorBase = {
 
       if (!Data.ddp?.autoReconnect) return;
 
-      if (!lastDisconnect || new Date().getTime() - lastDisconnect.getTime() > 3000) {
+      if (
+        !lastDisconnect ||
+        new Date().getTime() - lastDisconnect.getTime() > 3000
+      ) {
         Data.ddp?.connect();
       }
 
@@ -231,7 +235,6 @@ const Meteor: MeteorBase = {
     });
 
     Data.ddp.on('added', (message: any) => {
-
       if (!Data.db[message.collection]) {
         Data.db.addCollection(message.collection);
       }
@@ -258,7 +261,6 @@ const Meteor: MeteorBase = {
     });
 
     Data.ddp.on('ready', (message: any) => {
-
       const idsMap = new Map<string, string>();
       for (var i in Data.subscriptions) {
         const sub = Data.subscriptions[i];
@@ -276,7 +278,6 @@ const Meteor: MeteorBase = {
     });
 
     Data.ddp.on('changed', (message: any) => {
-
       const unset: Record<string, any> = {};
       if (message.cleared) {
         message.cleared.forEach((field: string) => {
@@ -297,7 +298,11 @@ const Meteor: MeteorBase = {
         collection.upsert(partialUpdate);
         const newDocument = collection.findOne({ _id: message.id });
 
-        let observers = getObservers('changed', message.collection, newDocument);
+        let observers = getObservers(
+          'changed',
+          message.collection,
+          newDocument
+        );
         observers.forEach((callback) => {
           try {
             callback(newDocument, oldDocument, message.fields);
@@ -309,7 +314,6 @@ const Meteor: MeteorBase = {
     });
 
     Data.ddp.on('removed', (message: any) => {
-
       if (Data.db[message.collection]) {
         const oldDocument = Data.db[message.collection].findOne({
           _id: message.id,
@@ -330,7 +334,6 @@ const Meteor: MeteorBase = {
       }
     });
     Data.ddp.on('result', (message: any) => {
-
       const call = Data.calls.find((c) => c.id === message.id);
       if (call && typeof call.callback === 'function') {
         call.callback(message.error, message.result);
@@ -340,7 +343,6 @@ const Meteor: MeteorBase = {
     });
 
     Data.ddp.on('nosub', (message: any) => {
-
       if (this.removing[message.id]) {
         delete this.removing[message.id];
       }

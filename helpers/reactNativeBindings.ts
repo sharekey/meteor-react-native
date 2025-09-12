@@ -1,4 +1,7 @@
-const bindings: { batchedUpdates?: (cb: () => void) => void; runAfterInteractions?: (fn: () => void) => void } = {};
+const bindings: {
+  batchedUpdates?: (cb: () => void) => void;
+  runAfterInteractions?: (fn: () => void) => void;
+} = {};
 
 // TODO:
 // we should consider implementing an injection-based pattern for
@@ -20,7 +23,8 @@ try {
   // we fall back to some defaults that seem to be close to what
   // the original functions implement
   bindings.batchedUpdates = (cb: () => void) => cb();
-  bindings.runAfterInteractions = (fn: () => void) => setTimeout(() => fn(), 50);
+  bindings.runAfterInteractions = (fn: () => void) =>
+    setTimeout(() => fn(), 50);
 }
 
 export const batchedUpdates = bindings.batchedUpdates!;

@@ -1,6 +1,9 @@
 import Minimongo from '@meteorrn/minimongo';
 import Tracker from './Tracker';
-import { batchedUpdates, runAfterInteractions } from '../helpers/reactNativeBindings';
+import {
+  batchedUpdates,
+  runAfterInteractions,
+} from '../helpers/reactNativeBindings';
 import type DDP from '../lib/ddp';
 
 export type KeyStorage = {
@@ -56,7 +59,12 @@ function runAfterOtherComputations(fn: () => void) {
  * @type {object}
  * @summary The data layer representation. Returned by {Meteor.getData}
  */
-type DataEventName = 'loggingIn' | 'loggingOut' | 'change' | 'onLogin' | 'onLoginFailure';
+type DataEventName =
+  | 'loggingIn'
+  | 'loggingOut'
+  | 'change'
+  | 'onLogin'
+  | 'onLoginFailure';
 
 const Data = {
   /**
@@ -83,7 +91,10 @@ const Data = {
   /**
    * @private
    */
-  calls: [] as { id: string; callback?: (err?: unknown, result?: unknown) => void }[],
+  calls: [] as {
+    id: string;
+    callback?: (err?: unknown, result?: unknown) => void;
+  }[],
 
   /**
    * Returns the base-url of our connection-endpoint,
@@ -113,7 +124,10 @@ const Data = {
   /**
    * @private
    */
-  _cbs: [] as { eventName: DataEventName; callback: (...args: any[]) => void }[],
+  _cbs: [] as {
+    eventName: DataEventName;
+    callback: (...args: any[]) => void;
+  }[],
 
   /**
    * Listens to various events of change and pipes them into a single callback.
