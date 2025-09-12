@@ -116,7 +116,7 @@ class EventInterface {
   activate(ddp: DDP) {
     this.ddp = ddp;
     PUBLIC_EVENTS.forEach((eventName) => {
-      this.ddp.addListener(eventName, (event: any) => {
+      this.ddp.on(eventName, (event: any) => {
         // TODO for silly logging it might be a good place log here
         this._handleEvent(eventName as any, event as any);
       });
