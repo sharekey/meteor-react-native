@@ -1,32 +1,49 @@
 import Minimongo from '@meteorrn/minimongo';
-import Tracker from './Tracker.js';
-import {
-  batchedUpdates,
-  runAfterInteractions,
-} from '../helpers/reactNativeBindings';
+import Tracker from './Tracker';
+import { batchedUpdates, runAfterInteractions } from '../helpers/reactNativeBindings';
+import type DDP from '../lib/ddp';
+
+export type KeyStorage = {
+  getItem(key: string): Promise<string | null> | string | null;
+  setItem(key: string, value: string): Promise<void> | void;
+  removeItem(key: string): Promise<void> | void;
+};
+
+export type ConnectOptions = {
+  KeyStorage: KeyStorage;
+  suppressUrlErrors?: boolean;
+  reachabilityUrl?: string;
+  NetInfo?: any;
+  isVerbose?: boolean;
+  logger?: (msg: any) => void;
+  autoConnect?: boolean;
+  autoReconnect?: boolean;
+  reconnectInterval?: number;
+  isPrivate?: boolean;
+};
 
 /**
  * @private
  */
-const db = new Minimongo();
+const db = new (Minimongo as any)();
 db.debug = false;
 db.batchedUpdates = batchedUpdates;
 
 /**
  * @private
  */
-process.nextTick = setImmediate;
+(process as any).nextTick = setImmediate as any;
 
 /**
  * @private
  */
-afterInteractions = runAfterInteractions;
+let afterInteractions: (fn: () => void) => void = runAfterInteractions;
 
 /**
  * @private
  * @param fn
  */
-function runAfterOtherComputations(fn) {
+function runAfterOtherComputations(fn: () => void) {
   afterInteractions(() => {
     Tracker.afterFlush(() => {
       fn();
@@ -39,47 +56,51 @@ function runAfterOtherComputations(fn) {
  * @type {object}
  * @summary The data layer representation. Returned by {Meteor.getData}
  */
+type DataEventName = 'loggingIn' | 'loggingOut' | 'change' | 'onLogin' | 'onLoginFailure';
+
 const Data = {
   /**
    * the ws-endpoint url to connect to
    * @privae
    */
-  _endpoint: null,
+  _endpoint: '' as string,
   /**
    * @private
    */
-  _options: {},
+  _options: {} as Partial<ConnectOptions> & { KeyStorage: KeyStorage },
   /**
    * @summary The DDP implementation we use for this library
    * @type {DDP}
    */
-  ddp: null,
-  subscriptions: {},
+  ddp: null as DDP | null,
+  subscriptions: {} as Record<string, any>,
   /**
    * The Minimongo database implementation we use for this library
    * @type {Minimongo}
    */
-  db: db,
+  db: db as any,
 
   /**
    * @private
    */
-  calls: [],
+  calls: [] as { id: string; callback?: (err?: unknown, result?: unknown) => void }[],
 
   /**
    * Returns the base-url of our connection-endpoint,
    * having /websocket being stripped
    * @returns {string} the connection url
    */
-  getUrl() {
-    return this._endpoint.substring(0, this._endpoint.indexOf('/websocket'));
+  getUrl(): string {
+    if (!this._endpoint) return '';
+    const i = this._endpoint.indexOf('/websocket');
+    return i >= 0 ? this._endpoint.substring(0, i) : this._endpoint;
   },
 
   /**
    * Runs a callback, once we have our DDP implementation available
    * @param cb {function}
    */
-  waitDdpReady(cb) {
+  waitDdpReady(cb: (...args: any[]) => void) {
     if (this.ddp) {
       cb();
     } else {
@@ -92,7 +113,7 @@ const Data = {
   /**
    * @private
    */
-  _cbs: [],
+  _cbs: [] as { eventName: DataEventName; callback: (...args: any[]) => void }[],
 
   /**
    * Listens to various events of change and pipes them into a single callback.
@@ -105,10 +126,10 @@ const Data = {
    * - DB: change
    * @param cb {function}
    */
-  onChange(cb) {
+  onChange(cb: (...args: any[]) => void) {
     this.db.on('change', cb);
-    this.ddp.on('connected', cb);
-    this.ddp.on('disconnected', cb);
+    this.ddp?.on('connected' as any, cb as any);
+    this.ddp?.on('disconnected' as any, cb as any);
     this.on('loggingIn', cb);
     this.on('loggingOut', cb);
     this.on('change', cb);
@@ -119,10 +140,10 @@ const Data = {
    * Requires the **exact same callback function** to work properly!
    * @param cb {function}
    */
-  offChange(cb) {
+  offChange(cb: (...args: any[]) => void) {
     this.db.off('change', cb);
-    this.ddp.off('connected', cb);
-    this.ddp.off('disconnected', cb);
+    this.ddp?.off('connected' as any, cb as any);
+    this.ddp?.off('disconnected' as any, cb as any);
     this.off('loggingIn', cb);
     this.off('loggingOut', cb);
     this.off('change', cb);
@@ -133,7 +154,7 @@ const Data = {
    * @param eventName {string}
    * @param cb {function}
    */
-  on(eventName, cb) {
+  on(eventName: DataEventName, cb: (...args: any[]) => void) {
     this._cbs.push({
       eventName: eventName,
       callback: cb,
@@ -145,20 +166,18 @@ const Data = {
    * @param eventName {string}
    * @param cb {function}
    */
-  off(eventName, cb) {
-    this._cbs.splice(
-      this._cbs.findIndex(
-        (_cb) => _cb.callback == cb && _cb.eventName == eventName
-      ),
-      1
+  off(eventName: DataEventName, cb: (...args: any[]) => void) {
+    const idx = this._cbs.findIndex(
+      (_cb) => _cb.callback === cb && _cb.eventName === eventName
     );
+    if (idx >= 0) this._cbs.splice(idx, 1);
   },
   /**
    * Run all callbacks that listen on a given event by name.
    * @param eventName {string}
    * @param optionalData {object=}
    */
-  notify(eventName, optionalData) {
+  notify(eventName: DataEventName, optionalData?: unknown) {
     // Notifify that changes have been made
     // Put in timeout so it doesn't block main thread
     setTimeout(() => {
@@ -174,11 +193,11 @@ const Data = {
    * is established.
    * @param callback {function}
    */
-  waitDdpConnected(callback) {
-    if (this.ddp && this.ddp.status == 'connected') {
+  waitDdpConnected(callback: (...args: any[]) => void) {
+    if (this.ddp && (this.ddp as any).status == 'connected') {
       callback();
     } else if (this.ddp) {
-      this.ddp.once('connected', callback);
+      (this.ddp as any).once('connected', callback as any);
     } else {
       setTimeout(() => {
         this.waitDdpConnected(callback);

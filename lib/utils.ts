@@ -1,12 +1,12 @@
 import { SHA256 } from './sha256';
 
-var i = 0;
+let i = 0;
 
 /**
  * Returns an ever incrementing integer value as string
  * @returns {string}
  */
-export function uniqueId() {
+export function uniqueId(): string {
   return (i++).toString();
 }
 
@@ -15,7 +15,7 @@ export function uniqueId() {
  * @param password
  * @returns {{digest: string, algorithm: string}}
  */
-export function hashPassword(password) {
+export function hashPassword(password: string): { digest: string; algorithm: string } {
   // XXX: we should extract this function in a way to let clients inject
   // it, so they can leverage react-native crypto packages that
   // implement a secure hashing algorithm like bcrypt
@@ -27,9 +27,9 @@ export function hashPassword(password) {
 }
 
 //From Meteor core
-var class2type = {};
+const class2type: Record<string, string> = {};
 
-var toString = class2type.toString;
+const toString = class2type.toString;
 
 /**
  * Short for Object.prototype.hasOwnProperty.call
@@ -37,10 +37,10 @@ var toString = class2type.toString;
  * @param prop {string}
  * @returns {boolean}
  */
-export const hasOwn = (obj, prop) =>
+export const hasOwn = (obj: any, prop: string): boolean =>
   Object.prototype.hasOwnProperty.call(obj, prop);
 
-var support = {};
+const support: Record<string, any> = {};
 
 // Populate the class2type map
 // TODO should we include Symbol, Generator, Iterator, BigInt etc.?
@@ -54,7 +54,7 @@ typeMap.split(' ').forEach((name, i) => {
  * @param obj {any}
  * @returns {string}
  */
-function type(obj) {
+function type(obj: any): string {
   if (obj == null) {
     return obj + '';
   }
@@ -68,7 +68,7 @@ function type(obj) {
  * @param obj
  * @returns {boolean}
  */
-function isWindow(obj) {
+function isWindow(obj: any): boolean {
   /* jshint eqeqeq: false */
   return obj != null && obj == obj.window;
 }
@@ -80,8 +80,8 @@ function isWindow(obj) {
  * @param obj
  * @returns {boolean}
  */
-export function isPlainObject(obj) {
-  var key;
+export function isPlainObject(obj: any): boolean {
+  let key: any;
 
   // Must be an Object.
   // Because of IE, we also have to check the presence of the constructor property.
@@ -115,6 +115,7 @@ export function isPlainObject(obj) {
   // Own properties are enumerated firstly, so to speed up,
   // if last one is own, then all properties are own.
   for (key in obj) {
+    // iterate
   }
 
   return key === undefined || hasOwn(obj, key);

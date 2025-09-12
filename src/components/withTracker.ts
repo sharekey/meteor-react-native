@@ -1,4 +1,4 @@
-import React, { forwardRef, memo } from 'react';
+import { forwardRef, memo, createElement } from 'react';
 import useTracker from './useTracker';
 
 /**
@@ -19,15 +19,17 @@ import useTracker from './useTracker';
  * @param options
  * @returns {function(React.Component):React.NamedExoticComponent}
  */
-export default function withTracker(options) {
-  return (Component) => {
+export default function withTracker<TProps = any>(
+  options: ((props: TProps) => Record<string, any>) | { getMeteorData: (props: TProps) => Record<string, any>; pure?: boolean }
+) {
+  return (Component: any) => {
     const expandedOptions =
       typeof options === 'function' ? { getMeteorData: options } : options;
     const { getMeteorData, pure = true } = expandedOptions;
 
-    const WithTracker = forwardRef((props, ref) => {
+    const WithTracker = (forwardRef as any)((props: TProps, ref: any) => {
       const data = useTracker(() => getMeteorData(props) || {}, [props]);
-      return React.createElement(Component, { ref, ...props, ...data });
+      return createElement(Component as any, { ref, ...props, ...data });
     });
 
     return pure ? memo(WithTracker) : WithTracker;

@@ -1,8 +1,8 @@
 import { useEffect, useRef, useReducer, useMemo } from 'react';
-import Tracker from '../Tracker.js';
+import Tracker from '../Tracker';
 
 /** @private */
-const increment = (x) => x + 1;
+const increment = (x: number) => x + 1;
 /** @private */
 const useForceUpdate = () => useReducer(increment, 0)[1];
 
@@ -20,10 +20,16 @@ const useForceUpdate = () => useReducer(increment, 0)[1];
  * @param deps
  * @returns {null}
  */
-export default (trackerFn, deps = []) => {
-  const { current: refs } = useRef({
-    data: null,
-    meteorDataDep: new Tracker.Dependency(),
+export default <T = any>(trackerFn: () => T, deps: any[] = []) => {
+  const { current: refs } = useRef<{
+    data: T;
+    meteorDataDep: any;
+    trackerFn: () => T;
+    computation: { stop: () => void } | null;
+    isMounted: boolean;
+  }>({
+    data: null as any as T,
+    meteorDataDep: new (Tracker as any).Dependency(),
     trackerFn: trackerFn,
     computation: null,
     isMounted: true,
@@ -37,7 +43,7 @@ export default (trackerFn, deps = []) => {
       refs.computation = null;
     }
     Tracker.nonreactive(() => {
-      Tracker.autorun((currentComputation) => {
+      Tracker.autorun((currentComputation: any) => {
         if (refs.isMounted) {
           refs.computation = currentComputation;
           refs.data = trackerFn();

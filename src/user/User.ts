@@ -1,11 +1,14 @@
 import Data from '../Data';
 import { hashPassword } from '../../lib/utils';
 import Mongo from '../Mongo';
-import Meteor from '../Meteor.js';
+import Meteor from '../Meteor';
 import ReactiveDict from '../ReactiveDict';
+import type { Collection } from '../Collection';
+
+type UserDoc = { _id: string } & Record<string, any>;
 
 const TOKEN_KEY = 'Meteor.loginToken';
-const Users = new Mongo.Collection('users');
+const Users = new (Mongo as any).Collection('users') as Collection<UserDoc>;
 
 /**
  * @namespace User
@@ -17,157 +20,175 @@ const User = {
   users: Users,
   _reactiveDict: new ReactiveDict(),
 
-  user() {
-    let user_id = this._reactiveDict.get('_userIdSaved');
-
+  user(): UserDoc | null {
+    const user_id = this._reactiveDict.get('_userIdSaved');
     if (!user_id) return null;
-
-    return Users.findOne(user_id);
+    return Users.findOne(user_id) || null;
   },
-  userId() {
-    let user_id = this._reactiveDict.get('_userIdSaved');
 
+  userId(): string | null {
+    const user_id = this._reactiveDict.get('_userIdSaved');
     if (!user_id) return null;
-
     const user = Users.findOne(user_id);
-    return user && user._id;
+    return user?._id ?? null;
   },
+
   _isLoggingIn: true,
   _isLoggingOut: false,
-  loggingIn() {
-    return this._reactiveDict.get('_loggingIn');
+  _userIdSaved: null as string | null,
+  _timeout: 50,
+  _isTokenLogin: false,
+  _isCallingLogin: false,
+
+  loggingIn(): boolean {
+    return !!this._reactiveDict.get('_loggingIn');
   },
-  loggingOut() {
-    return User._isLoggingOut;
+
+  loggingOut(): boolean {
+    return !!User._isLoggingOut;
   },
-  logout(callback) {
+
+  logout(callback?: (err?: any) => void): void {
     this._isTokenLogin = false;
     User._startLoggingOut();
-    Meteor.call('logout', (err) => {
+    Meteor.call('logout', (err: any) => {
       User.handleLogout();
       Meteor.connect();
-
-      typeof callback == 'function' && callback(err);
+      if (typeof callback === 'function') callback(err);
     });
   },
-  handleLogout() {
+
+  handleLogout(): void {
     Data._options.KeyStorage.removeItem(TOKEN_KEY);
-    Data._tokenIdSaved = null;
+    (Data as any)._tokenIdSaved = null;
     this._reactiveDict.set('_userIdSaved', null);
 
     User._userIdSaved = null;
     User._endLoggingOut();
   },
-  loginWithPassword(selector, password, callback) {
+
+  loginWithPassword(
+    selector: string | Record<string, any>,
+    password: string,
+    callback?: (err?: any) => void
+  ): void {
     this._isTokenLogin = false;
+    let sel: Record<string, any>;
     if (typeof selector === 'string') {
-      if (selector.indexOf('@') === -1) selector = { username: selector };
-      else selector = { email: selector };
-    }
+      if (selector.indexOf('@') === -1) sel = { username: selector };
+      else sel = { email: selector };
+    } else sel = selector;
 
     User._startLoggingIn();
     Meteor.call(
       'login',
       {
-        user: selector,
+        user: sel,
         password: hashPassword(password),
       },
-      (err, result) => {
+      (err: any, result: any) => {
         User._handleLoginCallback(err, result);
-
-        typeof callback == 'function' && callback(err);
+        if (typeof callback === 'function') callback(err);
       }
     );
   },
-  loginWithPasswordAnd2faCode(selector, password, code, callback) {
+
+  loginWithPasswordAnd2faCode(
+    selector: string | Record<string, any>,
+    password: string,
+    code: string | number,
+    callback?: (err?: any) => void
+  ): void {
     this._isTokenLogin = false;
+    let sel: Record<string, any>;
     if (typeof selector === 'string') {
-      if (selector.indexOf('@') === -1) selector = { username: selector };
-      else selector = { email: selector };
-    }
+      if (selector.indexOf('@') === -1) sel = { username: selector };
+      else sel = { email: selector };
+    } else sel = selector;
 
     User._startLoggingIn();
     Meteor.call(
       'login',
       {
-        user: selector,
+        user: sel,
         password: hashPassword(password),
         code,
       },
-      (err, result) => {
+      (err: any, result: any) => {
         User._handleLoginCallback(err, result);
-
-        typeof callback == 'function' && callback(err);
+        if (typeof callback === 'function') callback(err);
       }
     );
   },
-  logoutOtherClients(callback = () => {}) {
-    Meteor.call('getNewToken', (err, res) => {
+
+  logoutOtherClients(callback: (err?: any) => void = () => {}): void {
+    Meteor.call('getNewToken', (err: any, res: any) => {
       if (err) return callback(err);
 
       User._handleLoginCallback(err, res);
 
-      Meteor.call('removeOtherTokens', (err) => {
-        callback(err);
+      Meteor.call('removeOtherTokens', (err2: any) => {
+        callback(err2);
       });
     });
   },
-  _login(user, callback) {
-    User._startLoggingIn();
-    Meteor.call('login', user, (err, result) => {
-      User._handleLoginCallback(err, result);
 
-      typeof callback == 'function' && callback(err);
+  _login(user: any, callback?: (err?: any) => void): void {
+    User._startLoggingIn();
+    Meteor.call('login', user, (err: any, result: any) => {
+      User._handleLoginCallback(err, result);
+      if (typeof callback === 'function') callback(err);
     });
   },
-  _startLoggingIn() {
+
+  _startLoggingIn(): void {
     this._reactiveDict.set('_loggingIn', true);
     Data.notify('loggingIn');
   },
-  _startLoggingOut() {
+
+  _startLoggingOut(): void {
     User._isLoggingOut = true;
     Data.notify('loggingOut');
   },
-  _endLoggingIn() {
+
+  _endLoggingIn(): void {
     this._reactiveDict.set('_loggingIn', false);
     Data.notify('loggingIn');
   },
-  _endLoggingOut() {
+
+  _endLoggingOut(): void {
     User._isLoggingOut = false;
     Data.notify('loggingOut');
   },
-  _handleLoginCallback(err, result) {
+
+  _handleLoginCallback(err: any, result: any): void {
     if (!err) {
-      Meteor.isVerbose &&
+      if (Meteor.isVerbose) {
         console.info(
           'User._handleLoginCallback::: token:',
-          result.token,
+          result?.token,
           'id:',
-          result.id
+          result?.id
         );
+      }
       Data._options.KeyStorage.setItem(TOKEN_KEY, result.token);
-      Data._tokenIdSaved = result.token;
+      (Data as any)._tokenIdSaved = result.token;
       this._reactiveDict.set('_userIdSaved', result.id);
       User._userIdSaved = result.id;
       User._endLoggingIn();
       this._isTokenLogin = false;
       Data.notify('onLogin');
     } else {
-      Meteor.isVerbose &&
-        console.info('User._handleLoginCallback::: error:', err);
+      Meteor.isVerbose && console.info('User._handleLoginCallback::: error:', err);
       if (this._isTokenLogin) {
         setTimeout(() => {
-          if (User._userIdSaved) {
-            return;
-          }
+          if (User._userIdSaved) return;
           this._timeout *= 2;
-          if (Meteor.user()) {
-            return;
-          }
+          if ((Meteor as any).user()) return;
           User._loginWithToken(User._userIdSaved);
         }, this._timeout);
       }
-      // Signify we aren't logginging in any more after a few seconds
+      // Signify we aren't logging in any more after a few seconds
       if (this._timeout > 2000) {
         User._endLoggingIn();
       }
@@ -178,17 +199,17 @@ const User = {
     Data.notify('change');
   },
 
-  _timeout: 50,
-  _isTokenLogin: false,
-  _isCallingLogin: false,
-  _loginWithToken(value, callback) {
+  _loginWithToken(
+    value: string | null,
+    callback?: (err?: any, result?: any) => void
+  ): void {
     if (!value) {
       Meteor.isVerbose &&
         console.info(
           'User._loginWithToken::: parameter value is null, will not save as token.'
         );
     } else {
-      Data._tokenIdSaved = value;
+      (Data as any)._tokenIdSaved = value;
     }
 
     if (value !== null) {
@@ -199,7 +220,7 @@ const User = {
       }
       this._isCallingLogin = true;
       User._startLoggingIn();
-      Meteor.call('login', { resume: value }, (err, result) => {
+      Meteor.call('login', { resume: value }, (err: any, result: any) => {
         this._isCallingLogin = false;
         if (err?.error == 'too-many-requests') {
           Meteor.isVerbose &&
@@ -207,19 +228,16 @@ const User = {
               'User._handleLoginCallback::: too many requests retrying:',
               err
             );
-          let time = err.details?.timeToReset || err.timeToReset;
+          const time = (err as any).details?.timeToReset || (err as any).timeToReset;
           setTimeout(() => {
-            if (User._userIdSaved) {
-              return;
-            }
+            if (User._userIdSaved) return;
             this._loadInitialUser();
-          }, time + 100);
+          }, (time || 0) + 100);
         } else if (err?.error === 403) {
           User.logout();
         } else {
           User._handleLoginCallback(err, result);
         }
-
         callback?.(err, result);
       });
     } else {
@@ -227,17 +245,19 @@ const User = {
       User._endLoggingIn();
     }
   },
-  getAuthToken() {
-    return Data._tokenIdSaved;
+
+  getAuthToken(): string | null {
+    return (Data as any)._tokenIdSaved || null;
   },
-  async _loadInitialUser() {
+
+  async _loadInitialUser(): Promise<void> {
     this._timeout = 500;
 
     User._startLoggingIn();
-    var value = null;
+    let value: string | null = null;
     try {
       value = await Data._options.KeyStorage.getItem(TOKEN_KEY);
-    } catch (error) {
+    } catch (error: any) {
       console.warn('KeyStorage error: ' + error.message);
     } finally {
       User._loginWithToken(value);

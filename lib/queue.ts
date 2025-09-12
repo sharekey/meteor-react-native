@@ -1,7 +1,8 @@
 /**
  * The internal message queue for the DDP protocol.
  */
-export default class Queue {
+export default class Queue<T = any> {
+  private queue: T[] = [];
   /**
    * As the name implies, `Consumer` is the (sole) consumer of the queue.
    *
@@ -12,16 +13,13 @@ export default class Queue {
    * @constructor
    * @param {function} consumer function to be called when the next element in the queue is to be processed
    */
-  constructor(consumer) {
-    this.consumer = consumer;
-    this.queue = [];
-  }
+  constructor(private consumer: (element: T) => boolean) {}
 
   /**
    * Adds a new element to the queue
    * @param element {any} likely an object
    */
-  push(element) {
+  push(element: T): void {
     this.queue.push(element);
     this.process();
   }
@@ -30,9 +28,9 @@ export default class Queue {
    * Sync; processes the queue by each element, starting with the first
    * and passing each to the consumer.
    */
-  process() {
+  process(): void {
     if (this.queue.length !== 0) {
-      const ack = this.consumer(this.queue[0]);
+      const ack = this.consumer(this.queue[0]!);
       if (ack) {
         this.queue.shift();
         this.process();
@@ -43,7 +41,7 @@ export default class Queue {
   /**
    * Clears all elements from the queue
    */
-  empty() {
-    this.queue = [];
+  empty(): void {
+    this.queue = [] as T[];
   }
 }

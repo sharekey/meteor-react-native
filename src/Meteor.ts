@@ -1,6 +1,6 @@
-import Tracker from './Tracker.js';
+import Tracker from './Tracker';
 import EJSON from 'ejson';
-import DDP from '../lib/ddp.js';
+import DDP from '../lib/ddp';
 import Random from '../lib/Random';
 
 import Data from './Data';
@@ -13,12 +13,45 @@ import useTracker from './components/useTracker';
 
 import ReactiveDict from './ReactiveDict';
 
+export interface MeteorBase {
+  isVerbose: boolean;
+  logger: (msg?: any, ...args: any[]) => void;
+  _reactiveDict: ReactiveDict;
+  Random: typeof Random;
+  Mongo: typeof Mongo;
+  Tracker: typeof Tracker;
+  EJSON: typeof EJSON;
+  ReactiveDict: typeof ReactiveDict;
+  Collection: typeof Collection;
+  collection(): never;
+  withTracker: typeof withTracker;
+  useTracker: typeof useTracker;
+  getData(): typeof Data;
+  status(): { connected: boolean; status: string };
+  removing: Record<string, boolean>;
+  call: typeof call;
+  disconnect(): void;
+  _subscriptionsRestart(): void;
+  waitDdpConnected: (cb: (...args: any[]) => void) => void;
+  reconnect(): void;
+  connect(endpoint?: string, options?: any): void;
+  requireDdp(): DDP;
+  subscribe(
+    name: string,
+    ...args: any[]
+  ): { stop(): void; ready(): boolean; subscriptionId: string };
+  ddp?: DDP;
+  connected?: boolean;
+}
+
 /**
  * @namespace Meteor
  * @type {object}
  * @summary the main Object to interact with this library
  */
-const Meteor = {
+type Status = 'disconnected' | 'connected' | string;
+
+const Meteor: MeteorBase = {
   isVerbose: false,
   // Default logger; can be overridden via options.logger in connect
   logger: console.info,
@@ -59,24 +92,31 @@ const Meteor = {
     };
   },
 
-  removing: {},
+  removing: {} as Record<string, boolean>,
   call: call,
   disconnect() {
     if (Data.ddp) {
       Data.ddp.disconnect();
     }
   },
+  /** Ensure DDP instance is available before using it */
+  requireDdp(): DDP {
+    const ddp = Data.ddp as DDP | null;
+    if (!ddp) throw new Error('DDP is not initialized. Call Meteor.connect() first.');
+    return ddp;
+  },
   _subscriptionsRestart() {
+    const ddp = this.requireDdp();
     for (var i in Data.subscriptions) {
       const sub = Data.subscriptions[i];
-      Data.ddp.unsub(sub.subIdRemember);
+      ddp.unsub(sub.subIdRemember);
       this.removing[sub.subIdRemember] = true;
-      sub.subIdRemember = Data.ddp.sub(sub.name, sub.params);
+      sub.subIdRemember = ddp.sub(sub.name, sub.params);
     }
     // If we get a double restart, make sure we keep track and
     // remove it later
     Object.keys(this.removing).forEach((item) => {
-      Data.ddp.unsub(item);
+      ddp.unsub(item);
     });
   },
   waitDdpConnected: Data.waitDdpConnected.bind(Data),
@@ -95,7 +135,7 @@ const Meteor = {
    * @param options.reachabilityUrl {string=} a URL that is used by @react-native-community/netinfo to run a connection
    *   check using a 204 request
    */
-  connect(endpoint, options) {
+  connect(endpoint?: string, options?: any) {
     if (!endpoint) endpoint = Data._endpoint;
     if (!options) options = Data._options;
     if (options.isVerbose !== undefined) {
@@ -125,7 +165,7 @@ const Meteor = {
 
     const ddp = new DDP({
       endpoint: endpoint,
-      SocketConstructor: WebSocket,
+      SocketConstructor: WebSocket as any,
       ...options,
     });
 
@@ -154,7 +194,7 @@ const Meteor = {
       }
 
       if (!sessionReused) {
-        this._loadInitialUser().then(() => {
+        (this as any)._loadInitialUser().then(() => {
           this._subscriptionsRestart();
         });
       }
@@ -163,7 +203,7 @@ const Meteor = {
       Data.notify('change');
     });
 
-    let lastDisconnect = null;
+    let lastDisconnect: Date | null = null;
     Data.ddp.on('disconnected', () => {
       this.connected = false;
       this._reactiveDict.set('connected', false);
@@ -181,16 +221,16 @@ const Meteor = {
         sub.readyDeps.changed();
       }
 
-      if (!Data.ddp.autoReconnect) return;
+      if (!Data.ddp?.autoReconnect) return;
 
-      if (!lastDisconnect || new Date() - lastDisconnect > 3000) {
-        Data.ddp.connect();
+      if (!lastDisconnect || new Date().getTime() - lastDisconnect.getTime() > 3000) {
+        Data.ddp?.connect();
       }
 
       lastDisconnect = new Date();
     });
 
-    Data.ddp.on('added', (message) => {
+    Data.ddp.on('added', (message: any) => {
 
       if (!Data.db[message.collection]) {
         Data.db.addCollection(message.collection);
@@ -217,9 +257,9 @@ const Meteor = {
       }
     });
 
-    Data.ddp.on('ready', (message) => {
+    Data.ddp.on('ready', (message: any) => {
 
-      const idsMap = new Map();
+      const idsMap = new Map<string, string>();
       for (var i in Data.subscriptions) {
         const sub = Data.subscriptions[i];
         idsMap.set(sub.subIdRemember, sub.id);
@@ -235,12 +275,12 @@ const Meteor = {
       }
     });
 
-    Data.ddp.on('changed', (message) => {
+    Data.ddp.on('changed', (message: any) => {
 
-      const unset = {};
+      const unset: Record<string, any> = {};
       if (message.cleared) {
-        message.cleared.forEach((field) => {
-          unset[field] = null;
+        message.cleared.forEach((field: string) => {
+          (unset as any)[field] = null;
         });
       }
 
@@ -268,7 +308,7 @@ const Meteor = {
       }
     });
 
-    Data.ddp.on('removed', (message) => {
+    Data.ddp.on('removed', (message: any) => {
 
       if (Data.db[message.collection]) {
         const oldDocument = Data.db[message.collection].findOne({
@@ -289,18 +329,17 @@ const Meteor = {
         });
       }
     });
-    Data.ddp.on('result', (message) => {
+    Data.ddp.on('result', (message: any) => {
 
-      const call = Data.calls.find((call) => call.id == message.id);
-      if (typeof call.callback == 'function')
+      const call = Data.calls.find((c) => c.id === message.id);
+      if (call && typeof call.callback === 'function') {
         call.callback(message.error, message.result);
-      Data.calls.splice(
-        Data.calls.findIndex((call) => call.id == message.id),
-        1
-      );
+      }
+      const idx = Data.calls.findIndex((c) => c.id === message.id);
+      if (idx >= 0) Data.calls.splice(idx, 1);
     });
 
-    Data.ddp.on('nosub', (message) => {
+    Data.ddp.on('nosub', (message: any) => {
 
       if (this.removing[message.id]) {
         delete this.removing[message.id];
@@ -326,9 +365,9 @@ const Meteor = {
 
         // Reconnect if we lose internet
         NetInfo.addEventListener(
-          ({ type, isConnected, isInternetReachable, isWifiEnabled }) => {
-            if (isConnected && Data.ddp.autoReconnect) {
-              Data.ddp.connect();
+          ({ type, isConnected, isInternetReachable, isWifiEnabled }: any) => {
+            if (isConnected && Data.ddp?.autoReconnect) {
+              Data.ddp?.connect();
             }
           }
         );
@@ -339,9 +378,9 @@ const Meteor = {
       }
     }
   },
-  subscribe(name) {
+  subscribe(name: string) {
     let params = Array.prototype.slice.call(arguments, 1);
-    let callbacks = {};
+    let callbacks: any = {};
     if (params.length) {
       let lastParam = params[params.length - 1];
       if (typeof lastParam == 'function') {
@@ -375,7 +414,7 @@ const Meteor = {
     // being invalidated, we will require N matching subscribe calls to keep
     // them all active.
 
-    let existing = false;
+    let existing: any = false;
     for (let i in Data.subscriptions) {
       const sub = Data.subscriptions[i];
       if (sub.inactive && sub.name === name && EJSON.equals(sub.params, params))
@@ -402,7 +441,8 @@ const Meteor = {
       // New sub! Generate an id, save it locally, and send message.
 
       id = Random.id();
-      const subIdRemember = Data.ddp.sub(name, params);
+      const ddp = Meteor.requireDdp();
+      const subIdRemember = ddp.sub(name, params);
 
       // TODO subscription object should be represented by
       //   a Subscription data-class
@@ -417,7 +457,8 @@ const Meteor = {
         readyCallback: callbacks.onReady,
         stopCallback: callbacks.onStop,
         stop: function () {
-          Data.ddp.unsub(this.subIdRemember);
+          const ddp = Meteor.requireDdp();
+          ddp.unsub(this.subIdRemember);
           delete Data.subscriptions[this.id];
           this.ready && this.readyDeps.changed();
 
@@ -451,7 +492,7 @@ const Meteor = {
       // as a change to mark the subscription "inactive" so that it can
       // be reused from the rerun.  If it isn't reused, it's killed from
       // an afterFlush.
-      Tracker.onInvalidate(function (c) {
+      Tracker.onInvalidate(function (c: any) {
         if (Data.subscriptions[id]) {
           Data.subscriptions[id].inactive = true;
         }
@@ -472,7 +513,7 @@ const Meteor = {
   },
 };
 
-const getNetInfo = (NetInfo) =>
+const getNetInfo = (NetInfo?: any) =>
   NetInfo ? NetInfo : require('@react-native-community/netinfo').default;
 
 export default Meteor;

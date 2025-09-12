@@ -5,11 +5,11 @@ import EJSON from 'ejson';
  * Reference implementation of Meteor's MongoID
  * @type {{}}
  */
-const MongoID = {};
+const MongoID: any = {};
 
 const objectIdRegex = /^[0-9a-f]*$/;
 
-MongoID._looksLikeObjectID = function _looksLikeObjectID(str) {
+MongoID._looksLikeObjectID = function _looksLikeObjectID(str: string) {
   return str.length === 24 && objectIdRegex.test(str);
 };
 
@@ -21,7 +21,7 @@ MongoID._looksLikeObjectID = function _looksLikeObjectID(str) {
  * @constructor
  * @see https://docs.meteor.com/api/collections.html#Mongo-ObjectID
  */
-MongoID.ObjectID = function ObjectID(hexString) {
+MongoID.ObjectID = function ObjectID(this: any, hexString?: string) {
   // TODO rewrite es ES6 class!
   //random-based impl of Mongo ObjectID
   var self = this;
@@ -45,7 +45,7 @@ MongoID.ObjectID.prototype.toString = function toString() {
   return 'ObjectID("' + self._str + '")';
 };
 
-MongoID.ObjectID.prototype.equals = function equals(other) {
+MongoID.ObjectID.prototype.equals = function equals(other: any) {
   var self = this;
   return (
     other instanceof MongoID.ObjectID && self.valueOf() === other.valueOf()
@@ -73,11 +73,11 @@ MongoID.ObjectID.prototype.valueOf =
       return this._str;
     };
 
-EJSON.addType('oid', function (str) {
+EJSON.addType('oid', function (str: string) {
   return new MongoID.ObjectID(str);
 });
 
-MongoID.idStringify = function idStringify(id) {
+MongoID.idStringify = function idStringify(id: any) {
   if (id instanceof MongoID.ObjectID) {
     return id.valueOf();
   } else if (typeof id === 'string') {
@@ -106,7 +106,7 @@ MongoID.idStringify = function idStringify(id) {
   }
 };
 
-MongoID.idParse = function idParse(id) {
+MongoID.idParse = function idParse(id: any) {
   if (id === '') {
     return id;
   } else if (id === '-') {
@@ -122,4 +122,4 @@ MongoID.idParse = function idParse(id) {
   }
 };
 
-module.exports = MongoID;
+export default MongoID;

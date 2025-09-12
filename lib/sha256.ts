@@ -5,6 +5,7 @@
  * // TODO allow users to bring their own sha
  * @type {function(string): string}
  */
+// @ts-nocheck
 export const SHA256 = (function () {
   /**
    *  Used from: https://github.com/meteor/meteor/blob/devel/packages/sha/sha256.js
@@ -16,42 +17,42 @@ export const SHA256 = (function () {
    *
    **/
 
-  function SHA256(s) {
+  function SHA256(s: string): string {
     var chrsz = 8;
     var hexcase = 0;
 
-    function safe_add(x, y) {
+    function safe_add(x: number, y: number): number {
       var lsw = (x & 0xffff) + (y & 0xffff);
       var msw = (x >> 16) + (y >> 16) + (lsw >> 16);
       return (msw << 16) | (lsw & 0xffff);
     }
 
-    function S(X, n) {
+    function S(X: number, n: number): number {
       return (X >>> n) | (X << (32 - n));
     }
-    function R(X, n) {
+    function R(X: number, n: number): number {
       return X >>> n;
     }
-    function Ch(x, y, z) {
+    function Ch(x: number, y: number, z: number): number {
       return (x & y) ^ (~x & z);
     }
-    function Maj(x, y, z) {
+    function Maj(x: number, y: number, z: number): number {
       return (x & y) ^ (x & z) ^ (y & z);
     }
-    function Sigma0256(x) {
+    function Sigma0256(x: number): number {
       return S(x, 2) ^ S(x, 13) ^ S(x, 22);
     }
-    function Sigma1256(x) {
+    function Sigma1256(x: number): number {
       return S(x, 6) ^ S(x, 11) ^ S(x, 25);
     }
-    function Gamma0256(x) {
+    function Gamma0256(x: number): number {
       return S(x, 7) ^ S(x, 18) ^ R(x, 3);
     }
-    function Gamma1256(x) {
+    function Gamma1256(x: number): number {
       return S(x, 17) ^ S(x, 19) ^ R(x, 10);
     }
 
-    function core_sha256(m, l) {
+    function core_sha256(m: number[], l: number): number[] {
       var K = new Array(
         0x428a2f98,
         0x71374491,
@@ -128,7 +129,7 @@ export const SHA256 = (function () {
         0x1f83d9ab,
         0x5be0cd19
       );
-      var W = new Array(64);
+      var W: number[] = new Array(64);
       var a, b, c, d, e, f, g, h, i, j;
       var T1, T2;
 
@@ -184,8 +185,8 @@ export const SHA256 = (function () {
       return HASH;
     }
 
-    function str2binb(str) {
-      var bin = Array();
+    function str2binb(str: string): number[] {
+      var bin: number[] = Array();
       var mask = (1 << chrsz) - 1;
       for (var i = 0; i < str.length * chrsz; i += chrsz) {
         bin[i >> 5] |= (str.charCodeAt(i / chrsz) & mask) << (24 - (i % 32));
@@ -193,7 +194,7 @@ export const SHA256 = (function () {
       return bin;
     }
 
-    function Utf8Encode(string) {
+    function Utf8Encode(string: string): string {
       // METEOR change:
       // The webtoolkit.info version of this code added this
       // Utf8Encode function (which does seem necessary for dealing
@@ -221,7 +222,7 @@ export const SHA256 = (function () {
       return utftext;
     }
 
-    function binb2hex(binarray) {
+    function binb2hex(binarray: number[]): string {
       var hex_tab = hexcase ? '0123456789ABCDEF' : '0123456789abcdef';
       var str = '';
       for (var i = 0; i < binarray.length * 4; i++) {
@@ -237,5 +238,5 @@ export const SHA256 = (function () {
   }
 
   /// METEOR WRAPPER
-  return SHA256;
+  return SHA256 as unknown as (s: string) => string;
 })();

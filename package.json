@@ -2,10 +2,14 @@
   "name": "@meteorrn/core",
   "version": "2.8.1",
   "description": "Meteor Client for React Native",
-  "main": "src/index.js",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
   "scripts": {
     "lint": "prettier --check .",
     "lint:fix": "prettier --write .",
+    "build": "tsc -p tsconfig.json",
+    "prepare": "npm run build",
+    "release": "node scripts/release.mjs",
     "test:coverage": "nyc --reporter=html --reporter=text ./node_modules/.bin/mocha 'test/**/*tests.js'"
   },
   "keywords": [
@@ -29,6 +33,9 @@
     "@babel/register": "7.18.9",
     "@istanbuljs/nyc-config-babel": "3.0.0",
     "@react-native-community/netinfo": "*",
+    "@types/node": "^24.3.1",
+    "@types/react": "^18.3.24",
+    "@types/react-native": "^0.72.8",
     "babel-plugin-istanbul": "6.1.1",
     "c8": "7.12.0",
     "chai": "4.3.6",
@@ -41,7 +48,9 @@
     "prettier": "2.7.1",
     "react": "*",
     "rewiremock": "^3.14.6",
-    "sinon": "12.0.1"
+    "sinon": "12.0.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.0"
   },
   "peerDependencies": {
     "@react-native-community/netinfo": "*",
@@ -51,9 +60,14 @@
   "engines": {
     "node": ">= 14.x"
   },
+  "exports": {
+    ".": "./dist/src/index.js",
+    "./lib/*": "./dist/lib/*.js",
+    "./src/*": "./dist/src/*.js",
+    "./helpers/*": "./dist/helpers/*.js",
+    "./package.json": "./package.json"
+  },
   "files": [
-    "lib",
-    "src",
-    "helpers"
+    "dist"
   ]
 }

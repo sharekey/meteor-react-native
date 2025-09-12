@@ -1,3 +1,4 @@
+// @ts-nocheck
 /////////////////////////////////////////////////////
 // Package docs at http://docs.meteor.com/#tracker //
 /////////////////////////////////////////////////////
@@ -8,7 +9,7 @@
  * @summary The namespace for Tracker-related methods.
  * @see http://docs.meteor.com/#tracker
  */
-const Tracker = {};
+const Tracker: any = {};
 
 /**
  * @class
@@ -39,7 +40,7 @@ Tracker.currentComputation = null;
  * @private
  * @param c {Tracker.Computation}
  */
-function setCurrentComputation(c) {
+function setCurrentComputation(c: any) {
   Tracker.currentComputation = c;
   Tracker.active = !!c;
 }
@@ -48,7 +49,7 @@ function setCurrentComputation(c) {
  * @returns {*|function}
  * @private
  */
-function _debugFunc() {
+function _debugFunc(): any {
   // We want this code to work without Meteor, and also without
   // "console" (which is technically non-standard and may be missing
   // on some browser we come across, like it was on IE 7).
@@ -59,8 +60,8 @@ function _debugFunc() {
   }
 
   return typeof console !== 'undefined' && console.error
-    ? function () {
-        console.error.apply(console, arguments);
+    ? function (...args: any[]) {
+        console.error.apply(console, args as any);
       }
     : function () {};
 }
@@ -69,7 +70,7 @@ function _debugFunc() {
  * @param messagesLength {number}
  * @private
  */
-function _maybeSuppressMoreLogs(messagesLength) {
+function _maybeSuppressMoreLogs(messagesLength: number) {
   // Sometimes when running tests, we intentionally suppress logs on expected
   // printed errors. Since the current implementation of _throwOrLog can log
   // multiple separate log messages, suppress all of them if at least one suppress
@@ -86,7 +87,7 @@ function _maybeSuppressMoreLogs(messagesLength) {
  * @param e
  * @private
  */
-function _throwOrLog(from, e) {
+function _throwOrLog(from: string, e: any) {
   if (throwFirstError) {
     throw e;
   } else {
@@ -118,7 +119,7 @@ function _throwOrLog(from, e) {
  * @param f {function}
  * @returns {function|*}
  */
-function withNoYieldsAllowed(f) {
+function withNoYieldsAllowed(f: Function) {
   if (typeof Meteor === 'undefined' || Meteor.isClient) {
     return f;
   } else {
@@ -176,7 +177,18 @@ var constructingComputation = false;
  * @instancename computation
  */
 Tracker.Computation = class Computation {
-  constructor(f, parent, onError) {
+  _id: number;
+  _onInvalidateCallbacks: Function[];
+  _onStopCallbacks: Function[];
+  _parent: any;
+  _func: Function;
+  _onError?: (e: any) => void;
+  _recomputing: boolean;
+  stopped: boolean;
+  invalidated: boolean;
+  firstRun: boolean;
+  _isPending?: boolean;
+  constructor(f: Function, parent: any, onError?: (e: any) => void) {
     if (!constructingComputation)
       throw new Error(
         'Tracker.Computation constructor is private; use Tracker.autorun'
@@ -245,7 +257,7 @@ Tracker.Computation = class Computation {
    * @locus Client
    * @param {Function} callback Function to be called on invalidation. Receives one argument, the computation that was invalidated.
    */
-  onInvalidate(f) {
+  onInvalidate(f: Function) {
     if (typeof f !== 'function')
       throw new Error('onInvalidate requires a function');
 
@@ -263,7 +275,7 @@ Tracker.Computation = class Computation {
    * @locus Client
    * @param {Function} callback Function to be called on stop. Receives one argument, the computation that was stopped.
    */
-  onStop(f) {
+  onStop(f: Function) {
     if (typeof f !== 'function') throw new Error('onStop requires a function');
 
     if (this.stopped) {
@@ -591,7 +603,7 @@ Tracker._runFlush = function (options) {
  * thrown. Defaults to the error being logged to the console.
  * @returns {Tracker.Computation}
  */
-Tracker.autorun = function (f, options) {
+Tracker.autorun = function (f: Function, options?: any) {
   if (typeof f !== 'function')
     throw new Error('Tracker.autorun requires a function argument');
 
@@ -624,7 +636,7 @@ Tracker.autorun = function (f, options) {
  * @locus Client
  * @param {Function} func A function to call immediately.
  */
-Tracker.nonreactive = function (f) {
+Tracker.nonreactive = function (f: Function) {
   var previous = Tracker.currentComputation;
   setCurrentComputation(null);
   try {
@@ -641,7 +653,7 @@ Tracker.nonreactive = function (f) {
  * @locus Client
  * @param {Function} callback A callback function that will be invoked as `func(c)`, where `c` is the computation on which the callback is registered.
  */
-Tracker.onInvalidate = function (f) {
+Tracker.onInvalidate = function (f: Function) {
   if (!Tracker.active)
     throw new Error('Tracker.onInvalidate requires a currentComputation');
 
@@ -655,7 +667,7 @@ Tracker.onInvalidate = function (f) {
  * @locus Client
  * @param {Function} callback A function to call at flush time.
  */
-Tracker.afterFlush = function (f) {
+Tracker.afterFlush = function (f: Function) {
   afterFlushCallbacks.push(f);
   requireFlush();
 };

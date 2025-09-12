@@ -2,7 +2,15 @@ import EventEmitter from 'eventemitter3';
 import EJSON from 'ejson';
 import './mongo-id'; //  Register mongo object ids */
 
-const events = ['open', 'close', 'message:in', 'message:out'];
+type SocketEventMap = {
+  open: void;
+  close: void;
+  'message:in': any;
+  'message:out': any;
+  error: { isRaw?: boolean; type?: string; message?: string } | any;
+};
+
+const events = ['open', 'close', 'message:in', 'message:out'] as const;
 
 /**
  * Wrapper-class for whatever native Websocket implementation
@@ -10,7 +18,7 @@ const events = ['open', 'close', 'message:in', 'message:out'];
  * Standardizes messaging, so it's compatible with the Meteor backend.
  * @class
  */
-export default class Socket extends EventEmitter {
+export default class Socket extends EventEmitter<SocketEventMap> {
   /**
    * Instantiate a new Socket. Pass the actual Socket implementation as constructor.
    * @example
@@ -30,11 +38,16 @@ export default class Socket extends EventEmitter {
    * @param endpoint {string} the websocket endpoint, usually (but not necessarily)
    *  starts with ws:// or wss:// and ends with /websocket
    */
-  constructor(SocketConstructor, endpoint) {
+  private SocketConstructor: new (endpoint: string) => any;
+  private endpoint: string;
+  private rawSocket: any;
+  private closing?: boolean;
+
+  constructor(SocketConstructor: new (endpoint: string) => any, endpoint: string) {
     super();
     this.SocketConstructor = SocketConstructor;
     this.endpoint = endpoint;
-    this.rawSocket = null;
+    (this as any).rawSocket = null;
   }
 
   /**
@@ -42,7 +55,7 @@ export default class Socket extends EventEmitter {
    * Websocket implementation.
    * @param object {object}
    */
-  send(object) {
+  send(object: any) {
     if (!this.closing) {
       const message = EJSON.stringify(object);
       this.rawSocket.send(message);
@@ -89,8 +102,8 @@ export default class Socket extends EventEmitter {
      *   instance only once the message (first parameter to `onmessage`) has
      *   been successfully parsed into a javascript object.
      */
-    this.rawSocket.onmessage = (message) => {
-      var object;
+    this.rawSocket.onmessage = (message: any) => {
+      var object: any;
       try {
         object = EJSON.parse(message.data);
       } catch (ignore) {
@@ -107,7 +120,7 @@ export default class Socket extends EventEmitter {
      * Delegate the catched error one level up
      * @param event {Event} a generic Event that contains the error
      */
-    this.rawSocket.onerror = (event) => {
+    this.rawSocket.onerror = (event: any) => {
       // Sanitize native WebSocket error to avoid non-serializable payloads
       const payload = {
         isRaw: true,

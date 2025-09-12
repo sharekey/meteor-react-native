@@ -15,7 +15,7 @@ const DDP_VERSION = '1';
  * @type {string[]}
  * @private
  */
-const PUBLIC_EVENTS = [
+const PUBLIC_EVENTS: (keyof DDPEventMap)[] = [
   // connection messages
   'connected',
   'disconnected',
@@ -32,6 +32,42 @@ const PUBLIC_EVENTS = [
   'error',
 ];
 
+type DDPStatus = 'connected' | 'disconnected';
+
+type DDPConnectedMessage = { msg: 'connected'; session: string };
+type DDPPingMessage = { msg: 'ping'; id?: string };
+type DDPReadyMessage = { msg: 'ready'; subs: string[] };
+type DDPNoSubMessage = { msg: 'nosub'; id: string; error?: any };
+type DDPAddedMessage = { msg: 'added'; collection: string; id: string; fields?: any };
+type DDPChangedMessage = { msg: 'changed'; collection: string; id: string; fields?: any; cleared?: string[] };
+type DDPRemovedMessage = { msg: 'removed'; collection: string; id: string };
+type DDPResultMessage = { msg: 'result'; id: string; result?: any; error?: any };
+type DDPUpdatedMessage = { msg: 'updated'; methods: string[] };
+type DDPErrorMessage = { msg: 'error'; [k: string]: any };
+type DDPInbound =
+  | DDPConnectedMessage
+  | DDPPingMessage
+  | DDPReadyMessage
+  | DDPNoSubMessage
+  | DDPAddedMessage
+  | DDPChangedMessage
+  | DDPRemovedMessage
+  | DDPResultMessage
+  | DDPUpdatedMessage
+  | DDPErrorMessage
+  | { msg: string; [k: string]: any };
+
+interface DDPOptions {
+  endpoint: string;
+  SocketConstructor: new (endpoint: string) => any;
+  autoConnect?: boolean;
+  autoReconnect?: boolean;
+  reconnectInterval?: number;
+  logger?: (msg: any) => void;
+  isPrivate?: boolean;
+  isVerbose?: boolean;
+}
+
 /**
  * The default timout in ms until a reconnection attempt starts
  * @type {number}
@@ -46,10 +82,12 @@ const DEFAULT_RECONNECT_INTERVAL = 5000;
  * @private
  */
 class EventInterface {
+  listeners: { [K in keyof DDPEventMap]: Record<string, (event: DDPEventMap[K]) => void> };
+  ddp!: DDP;
   constructor() {
-    this.listeners = {};
+    this.listeners = Object.create(null);
     PUBLIC_EVENTS.forEach((eventName) => {
-      this.listeners[eventName] = {};
+      (this.listeners as any)[eventName] = {};
     });
   }
 
@@ -57,12 +95,12 @@ class EventInterface {
    * Attaches listeners to all public DDP events.
    * @param ddp
    */
-  activate(ddp) {
+  activate(ddp: DDP) {
     this.ddp = ddp;
     PUBLIC_EVENTS.forEach((eventName) => {
-      this.ddp.addListener(eventName, (event) => {
+      this.ddp.addListener(eventName, (event: any) => {
         // TODO for silly logging it might be a good place log here
-        this._handleEvent(eventName, event);
+        this._handleEvent(eventName as any, event as any);
       });
     });
 
@@ -75,10 +113,10 @@ class EventInterface {
    * @param event {object} the actual event to pass to the callbacks
    * @private
    */
-  _handleEvent(eventName, event) {
-    for (let func of Object.values(this.listeners[eventName])) {
+  _handleEvent<E extends keyof DDPEventMap>(eventName: E, event: DDPEventMap[E]) {
+    for (let func of Object.values((this.listeners as any)[eventName])) {
       try {
-        func(event);
+        (func as any)(event);
       } catch (e) {
         // TODO should we delegate this to the 'error' event listeners?
         //   It would at least make sense, since the
@@ -90,15 +128,15 @@ class EventInterface {
     }
   }
 
-  on(eventName, func) {
+  on<E extends keyof DDPEventMap>(eventName: E, func: (event: DDPEventMap[E]) => void) {
     // TODO check params
     const id = Math.random() + '';
-    if (!this.listeners[eventName])
+    if (!(this.listeners as any)[eventName])
       throw new Error(`Unsupported event name "${eventName}"`);
-    this.listeners[eventName][id] = func;
+    (this.listeners as any)[eventName][id] = func as any;
 
     // TODO represent by an EventHandle class
-    return { remove: () => delete this.listeners[eventName][id] };
+    return { remove: () => delete (this.listeners as any)[eventName][id] };
   }
 }
 
@@ -112,7 +150,31 @@ const eventInterface = new EventInterface();
  * Represents a DDP client that interfaces with the Meteor server backend
  * @class
  */
-class DDP extends EventEmitter {
+type DDPEventMap = {
+  connected: { sessionReused: boolean };
+  disconnected: void;
+  ready: DDPReadyMessage;
+  nosub: DDPNoSubMessage;
+  added: DDPAddedMessage;
+  changed: DDPChangedMessage;
+  removed: DDPRemovedMessage;
+  result: DDPResultMessage;
+  updated: DDPUpdatedMessage;
+  error: any;
+};
+
+class DDP extends EventEmitter<DDPEventMap> {
+  eventInterface: EventInterface;
+  status: DDPStatus;
+  logger: (msg: any) => void;
+  isPrivate: boolean;
+  isVerbose: boolean;
+  autoConnect: boolean;
+  autoReconnect: boolean;
+  reconnectInterval: number;
+  messageQueue: Queue<any>;
+  socket: Socket;
+  private _lastSessionId?: string;
   /**
    * Create a new DDP instance and runs the following init procedure:
    *
@@ -129,7 +191,7 @@ class DDP extends EventEmitter {
    * @see {Socket} the internal Socket implementation that is used
    *
    */
-  constructor(options) {
+  constructor(options: DDPOptions) {
     super();
 
     this.eventInterface = eventInterface.activate(this);
@@ -173,7 +235,7 @@ class DDP extends EventEmitter {
       this.isVerbose && this.logger('WebSocket connection opened');
       // When the socket opens, send the `connect` message
       // to establish the DDP connection
-      const connectMessage = {
+      const connectMessage: any = {
         msg: 'connect',
         version: DDP_VERSION,
         support: [DDP_VERSION],
@@ -195,7 +257,7 @@ class DDP extends EventEmitter {
       }
     });
 
-    this.socket.on('message:in', (message) => {
+    this.socket.on('message:in', (message: DDPInbound) => {
       if (message.msg === 'connected') {
         // mirror docs/index.js: log the connect message
         this.isVerbose && this.logger(message);
@@ -215,8 +277,8 @@ class DDP extends EventEmitter {
         this.isVerbose && this.logger(message);
         // Reply with a `pong` message to prevent the server from
         // closing the connection
-        this.socket.send({ msg: 'pong', id: message.id });
-      } else if (PUBLIC_EVENTS.includes(message.msg)) {
+        this.socket.send({ msg: 'pong', id: (message as any).id });
+      } else if (PUBLIC_EVENTS.includes(message.msg as any)) {
         if (this.isVerbose) {
           if (message.msg === 'ready' || message.msg === 'nosub' || message.msg === 'error') {
             this.logger(message);
@@ -238,7 +300,7 @@ class DDP extends EventEmitter {
           }
         }
         
-        this.emit(message.msg, message);
+        this.emit(message.msg as any, message as any);
       } else {
         const error = new Error(`Unexpected message received`);
         this.isVerbose && this.logger(error);
@@ -265,8 +327,8 @@ class DDP extends EventEmitter {
    * Emits a new event.
    * @override
    */
-  emit(...args) {
-    Promise.resolve().then(() => super.emit(...args));
+  emit<E extends keyof DDPEventMap>(event: E, payload?: DDPEventMap[E]): boolean {
+    Promise.resolve().then(() => super.emit(event, payload as any));
     return true;
   }
 
@@ -296,7 +358,7 @@ class DDP extends EventEmitter {
    * @param params {any} the params to pass, likely an object
    * @returns {string} a unique message id, beginning from 1, counting up for each message
    */
-  method(name, params) {
+  method(name: string, params: any) {
     const id = uniqueId();
     this.messageQueue.push({
       msg: 'method',
@@ -315,7 +377,7 @@ class DDP extends EventEmitter {
    * @param params  {any} args, passed to the sub, likely an object
    * @returns {string} a unique message id, beginning from 1, counting up for each message
    */
-  sub(name, params) {
+  sub(name: string, params: any) {
     const id = uniqueId();
     this.messageQueue.push({
       msg: 'sub',
@@ -333,7 +395,7 @@ class DDP extends EventEmitter {
    * @param id {string} id of the prior sub message
    * @returns {string} the id of the prior sub message
    */
-  unsub(id) {
+  unsub(id: string) {
     this.messageQueue.push({
       msg: 'unsub',
       id: id,

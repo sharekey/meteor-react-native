@@ -1,28 +1,33 @@
-import Tracker from './Tracker.js';
+// @ts-nocheck
+import Tracker from './Tracker';
 import EJSON from 'ejson';
 import Data from './Data';
 import Random from '../lib/Random';
 import call from './Call';
-import { hasOwn, isPlainObject } from '../lib/utils.js';
+import { hasOwn, isPlainObject } from '../lib/utils';
 
 /**
  * @private
  * @type {object}
  */
-const observers = Object.create(null);
+const observers: Record<string, any[]> = Object.create(null);
 /**
  * @private
  * @type {object}
  */
-const observersByComp = Object.create(null);
+const observersByComp: Record<string, Record<string, any>> = Object.create(null);
 /**
  * Get the list of callbacks for changes on a collection
  * @param {string} type - Type of change happening.
  * @param {string} collection - Collection it has happened on
  * @param {string} newDocument - New value of item in the collection
  */
-export function getObservers(type, collection, newDocument) {
-  let observersRet = [];
+export function getObservers(
+  type: 'added' | 'changed' | 'removed',
+  collection: string,
+  newDocument: any
+) {
+  let observersRet: Array<(...args: any[]) => void> = [];
   if (observers[collection]) {
     observers[collection].forEach(({ cursor, callbacks }) => {
       const cb = callbacks[type];
@@ -65,7 +70,7 @@ export function getObservers(type, collection, newDocument) {
 }
 
 /** @private */
-const _registerObserver = (collection, cursor, callbacks) => {
+const _registerObserver = (collection: string, cursor: any, callbacks: any) => {
   observers[collection] = observers[collection] || [];
   const entry = { cursor, callbacks };
   observers[collection].push(entry);
@@ -87,7 +92,17 @@ const _registerObserver = (collection, cursor, callbacks) => {
  *
  * @see https://docs.meteor.com/api/collections.html#mongo_cursor
  */
-class Cursor {
+type MinimongoCollection<T = any> = {
+  name: string;
+  find(selector?: any, options?: any): T[];
+  findOne(selector?: any, options?: any): T | undefined;
+  get(id: string): T | undefined;
+  upsert(doc: Partial<T> & { _id: string }): void;
+  remove(selector: any): void;
+  del(id: string): void;
+};
+
+class Cursor<T = any> {
   /**
    * Usually you don't use this directly, unless you know what you are doing.
    * @constructor
@@ -95,7 +110,10 @@ class Cursor {
    * @param docs
    * @param selector
    */
-  constructor(collection, docs, selector) {
+  _docs: T[];
+  _collection: Collection<T>;
+  _selector: any;
+  constructor(collection: Collection<T>, docs: T[], selector: any) {
     this._docs = docs || [];
     this._collection = collection;
     this._selector = selector;
@@ -109,7 +127,7 @@ class Cursor {
    * @deprecated
    * @returns {number} size of the collection
    */
-  count() {
+  count(): number {
     return this._docs.length;
   }
 
@@ -117,16 +135,16 @@ class Cursor {
    * Return all matching documents as an Array.
    * @returns {object[]}
    */
-  fetch() {
+  fetch(): T[] {
     return this._transformedDocs();
   }
 
   /**
    * Call callback once for each matching document, sequentially and synchronously.
-   * @param callback {function}
+  * @param callback {function}
    *     Function to call. It will be called with three arguments: the document, a 0-based index, and cursor itself.
    */
-  forEach(callback) {
+  forEach(callback: (doc: T, index: number, cursor: this) => void) {
     this._transformedDocs().forEach(callback);
   }
 
@@ -136,8 +154,8 @@ class Cursor {
    *   the document, a 0-based index, and cursor itself.
    * @returns {object[]}
    */
-  map(callback) {
-    return this._transformedDocs().map(callback);
+  map<U>(callback: (doc: T, index: number, cursor: this) => U): U[] {
+    return this._transformedDocs().map(callback as any);
   }
 
   /**
@@ -146,9 +164,9 @@ class Cursor {
    * @private
    * @returns {object[]}
    */
-  _transformedDocs() {
+  _transformedDocs(): T[] {
     return this._collection._transform
-      ? this._docs.map(this._collection._transform)
+      ? (this._docs as any).map(this._collection._transform)
       : this._docs;
   }
 
@@ -157,7 +175,7 @@ class Cursor {
    * @param callbacks {object}
    * @see https://docs.meteor.com/api/collections.html#Mongo-Cursor-observe
    */
-  observe(callbacks) {
+  observe(callbacks: Record<'added' | 'changed' | 'removed', Function>) {
     return _registerObserver(this._collection._collection.name, this, callbacks);
   }
 }
@@ -167,7 +185,7 @@ class Cursor {
  * are defined with `null`.
  *
  */
-export const localCollections = [];
+export const localCollections: string[] = [];
 
 /**
  * Reference implementation for a Mongo.Collection.
@@ -178,7 +196,7 @@ export const localCollections = [];
  * @see https://docs.meteor.com/api/collections.html
  * @see https://github.com/meteorrn/minimongo-cache
  */
-export class Collection {
+export class Collection<TDoc = any> {
   /**
    * Constructor for a Collection
    * @param name {string|null}
@@ -190,7 +208,11 @@ export class Collection {
    *  and before being passed to callbacks of observe, map, forEach, allow, and deny.
    *  Transforms are not applied for the callbacks of observeChanges or to cursors returned from publish functions.
    */
-  constructor(name, options = {}) {
+  _collection!: MinimongoCollection<TDoc>;
+  _name!: string;
+  _transform: ((doc: TDoc) => TDoc) | null = null;
+
+  constructor(name: string | null, options: { transform?: (doc: TDoc) => TDoc } = {}) {
     if (name === null) {
       this.localCollection = true;
       name = Random.id();
@@ -210,9 +232,9 @@ export class Collection {
 
     if (!Data.db[name]) Data.db.addCollection(name);
 
-    this._collection = Data.db[name];
+    this._collection = Data.db[name] as MinimongoCollection<TDoc>;
     this._name = name;
-    this._transform = wrapTransform(options.transform);
+    this._transform = wrapTransform(options.transform as any) as any;
   }
 
   /**
@@ -230,9 +252,9 @@ export class Collection {
    * @param options.fields {object=}
    * @returns {Cursor}
    */
-  find(selector, options) {
+  find(selector: string | Record<string, any>, options?: any): Cursor<TDoc> {
     let result;
-    let docs;
+    let docs: TDoc[] | undefined;
 
     if (typeof selector == 'string') {
       if (options) {
@@ -245,9 +267,9 @@ export class Collection {
     } else {
       docs = this._collection.find(selector, options);
     }
-    result = new Cursor(
+    result = new Cursor<TDoc>(
       this,
-      docs,
+      docs || [],
       typeof selector == 'string' ? { _id: selector } : selector
     );
 
@@ -255,7 +277,7 @@ export class Collection {
     // make the tracker computation to say if this
     // collection is changed it needs to be re-run
     if (Tracker.active && Tracker.currentComputation) {
-      let id = Tracker.currentComputation._id;
+      let id = (Tracker.currentComputation as any)._id;
       observersByComp[this._name] =
         observersByComp[this._name] || Object.create(null);
       if (!observersByComp[this._name][id]) {
@@ -270,7 +292,7 @@ export class Collection {
 
       item.callbacks.push({
         cursor: result,
-        callback: (newVal, old) => {
+        callback: (newVal: any, old: any) => {
           if (old && EJSON.equals(newVal, old)) {
             return;
           }
@@ -295,14 +317,14 @@ export class Collection {
    * @param options
    * @returns {Cursor}
    */
-  findOne(selector, options) {
+  findOne(selector: string | Record<string, any>, options?: any): TDoc | undefined {
     let result = this.find(selector, options);
 
     if (result) {
       result = result.fetch()[0];
     }
 
-    return result;
+    return result as any;
   }
 
   /**
@@ -311,7 +333,7 @@ export class Collection {
    * @param helpers {object} dictionary of helper functions that become prototypes of the documents
    * @see https://github.com/dburles/meteor-collection-helpers
    */
-  helpers(helpers) {
+  helpers(helpers: Record<string, Function>) {
     let _transform;
 
     if (this._transform && !this._helpers) _transform = this._transform;
@@ -320,7 +342,7 @@ export class Collection {
       this._helpers = function Document(doc) {
         return Object.assign(this, doc);
       };
-      this._transform = (doc) => {
+      this._transform = (doc: any) => {
         if (_transform) {
           doc = _transform(doc);
         }
@@ -348,13 +370,13 @@ export class Collection {
  * - If the return value doesn't have an _id field, add it back.
  * @private
  */
-function wrapTransform(transform) {
+function wrapTransform<T>(transform?: (doc: T) => T) {
   if (!transform) return null;
 
   // No need to doubly-wrap transforms.
   if (transform.__wrappedTransform__) return transform;
 
-  var wrapped = function (doc) {
+  var wrapped = function (doc: any) {
     if (!hasOwn(doc, '_id')) {
       // XXX do we ever have a transform on the oplog's collection? because that
       // collection has no _id.
@@ -364,7 +386,7 @@ function wrapTransform(transform) {
     var id = doc._id;
     // XXX consider making tracker a weak dependency and checking Package.tracker here
     var transformed = Tracker.nonreactive(function () {
-      return transform(doc);
+      return (transform as any)(doc);
     });
 
     if (!isPlainObject(transformed)) {
@@ -380,6 +402,6 @@ function wrapTransform(transform) {
     }
     return transformed;
   };
-  wrapped.__wrappedTransform__ = true;
-  return wrapped;
+  (wrapped as any).__wrappedTransform__ = true;
+  return wrapped as any;
 }

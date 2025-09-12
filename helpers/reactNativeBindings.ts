@@ -1,4 +1,4 @@
-const bindings = {};
+const bindings: { batchedUpdates?: (cb: () => void) => void; runAfterInteractions?: (fn: () => void) => void } = {};
 
 // TODO:
 // we should consider implementing an injection-based pattern for
@@ -19,8 +19,10 @@ try {
   // if the module is not installed (for example when running tests)
   // we fall back to some defaults that seem to be close to what
   // the original functions implement
-  bindings.batchedUpdates = (cb) => cb();
-  bindings.runAfterInteractions = (fn) => setTimeout(() => fn(), 50);
+  bindings.batchedUpdates = (cb: () => void) => cb();
+  bindings.runAfterInteractions = (fn: () => void) => setTimeout(() => fn(), 50);
 }
 
-module.exports = bindings;
+export const batchedUpdates = bindings.batchedUpdates!;
+export const runAfterInteractions = bindings.runAfterInteractions!;
+export default bindings;
