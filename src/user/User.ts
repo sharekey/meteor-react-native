@@ -8,7 +8,9 @@ import type { Collection } from '../Collection';
 type UserDoc<T> = { _id: string } & Record<string, any> & T;
 
 const TOKEN_KEY = 'Meteor.loginToken';
-const Users = new (Mongo as any).Collection('users') as Collection<UserDoc>;
+const Users = new (Mongo as any).Collection('users') as Collection<
+  UserDoc<unknown>
+>;
 
 /**
  * @namespace User
