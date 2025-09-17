@@ -25,7 +25,7 @@ const User = {
   user<T>(): UserDoc<T> | null {
     const user_id = this._reactiveDict.get('_userIdSaved');
     if (!user_id) return null;
-    return Users.findOne(user_id) || null;
+    return (Users.findOne(user_id) as UserDoc<T>) || null;
   },
 
   userId(): string | null {
