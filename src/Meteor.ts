@@ -110,6 +110,19 @@ const Meteor: MeteorBase = {
     const ddp = this.requireDdp();
     for (var i in Data.subscriptions) {
       const sub = Data.subscriptions[i];
+      if (this.isVerbose) {
+        try {
+          this.logger({
+            event: 'restart_sub',
+            name: sub.name,
+            // params: sub.params,
+            localId: sub.id,
+            subId: sub.subIdRemember,
+          });
+        } catch (e) {
+          // no-op
+        }
+      }
       ddp.unsub(sub.subIdRemember);
       this.removing[sub.subIdRemember] = true;
       sub.subIdRemember = ddp.sub(sub.name, sub.params);
@@ -267,9 +280,26 @@ const Meteor: MeteorBase = {
         idsMap.set(sub.subIdRemember, sub.id);
       }
       for (var i in message.subs) {
-        const subId = idsMap.get(message.subs[i]);
+        const serverSubId = message.subs[i];
+        const subId = idsMap.get(serverSubId);
         if (subId) {
           const sub = Data.subscriptions[subId];
+
+          // Verbose debug: log which subscription became ready
+          if (this.isVerbose) {
+            try {
+              this.logger({
+                event: 'ready',
+                subId: serverSubId,
+                name: sub.name,
+                localId: sub.id,
+                // params: sub.params,
+              });
+            } catch (e) {
+              // no-op
+            }
+          }
+
           sub.ready = true;
           sub.readyDeps.changed();
           sub.readyCallback && sub.readyCallback();
@@ -343,13 +373,53 @@ const Meteor: MeteorBase = {
     });
 
     Data.ddp.on('nosub', (message: any) => {
+      // Ignore nosub that corresponds to our own restart/unsub bookkeeping
       if (this.removing[message.id]) {
         delete this.removing[message.id];
+        return;
       }
-      for (var i in Data.subscriptions) {
-        const sub = Data.subscriptions[i];
-        if (sub.subIdRemember == message.id) {
-          console.warn('No subscription existing for', sub.name);
+
+      for (const id in Data.subscriptions) {
+        const sub = Data.subscriptions[id];
+        if (sub.subIdRemember === message.id) {
+          // Helpful debug: log which subscription this nosub refers to
+          if (this.isVerbose) {
+            try {
+              this.logger({
+                event: 'nosub',
+                subId: message.id,
+                name: sub.name,
+                localId: id,
+                // params: sub.params,
+              });
+            } catch (e) {
+              // no-op
+            }
+          }
+          // If server ended the subscription with an error, surface it
+          if (message.error && typeof sub.errorCallback === 'function') {
+            try {
+              sub.errorCallback(message.error);
+            } catch (e) {
+              console.error('Error in subscription onError callback', e);
+            }
+          }
+
+          // Always notify onStop when a subscription ends on the server
+          if (typeof sub.stopCallback === 'function') {
+            try {
+              sub.stopCallback(message.error);
+            } catch (e) {
+              console.error('Error in subscription onStop callback', e);
+            }
+          }
+
+          // Mirror local stop without sending another unsub
+          if (sub.ready) sub.readyDeps.changed();
+          delete Data.subscriptions[id];
+
+          // Found and handled matching sub; exit loop
+          break;
         }
       }
     });
@@ -439,6 +509,9 @@ const Meteor: MeteorBase = {
       if (callbacks.onStop) {
         existing.stopCallback = callbacks.onStop;
       }
+      if (callbacks.onError) {
+        existing.errorCallback = callbacks.onError;
+      }
     } else {
       // New sub! Generate an id, save it locally, and send message.
 
@@ -458,6 +531,7 @@ const Meteor: MeteorBase = {
         readyDeps: new Tracker.Dependency(),
         readyCallback: callbacks.onReady,
         stopCallback: callbacks.onStop,
+        errorCallback: callbacks.onError,
         stop: function () {
           const ddp = Meteor.requireDdp();
           ddp.unsub(this.subIdRemember);

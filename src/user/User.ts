@@ -55,7 +55,6 @@ const User = {
     User._startLoggingOut();
     Meteor.call('logout', (err: any) => {
       User.handleLogout();
-      Meteor.connect();
       if (typeof callback === 'function') callback(err);
     });
   },
