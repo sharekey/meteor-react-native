@@ -104,6 +104,19 @@ type MinimongoCollection<T = any> = {
   del(id: string): void;
 };
 
+type ObserveCallbacks<T> = {
+  /** Called when a document is added */
+  added?: (doc: T, previousDoc: T | null) => void;
+  /** Called when a document changes */
+  changed?: (
+    newDoc: T,
+    oldDoc: T | undefined,
+    fields?: Record<string, any>
+  ) => void;
+  /** Called when a document is removed */
+  removed?: (id: string, oldDoc: T | undefined) => void;
+};
+
 class Cursor<T = any> {
   /**
    * Usually you don't use this directly, unless you know what you are doing.
@@ -177,7 +190,7 @@ class Cursor<T = any> {
    * @param callbacks {object}
    * @see https://docs.meteor.com/api/collections.html#Mongo-Cursor-observe
    */
-  observe(callbacks: Record<'added' | 'changed' | 'removed', Function>) {
+  observe(callbacks: ObserveCallbacks<T>) {
     return _registerObserver(
       this._collection._collection.name,
       this,
@@ -252,8 +265,9 @@ export class Collection<TDoc = any> {
    * // TODO add reactive flag to options to disable reactivity for this call
    * // TODO evaluate if hint: { $natural } can be implemented for backward search
    *
-   * @param selector {string|object}
-   *     A query describing the documents to find
+   * @param selector {string|object=}
+   *     Optional query describing the documents to find. If omitted,
+   *     all documents are matched.
    * @param options {object=}
    * @param options.sort {object=}
    * @param options.limit {number=}
@@ -261,7 +275,7 @@ export class Collection<TDoc = any> {
    * @param options.fields {object=}
    * @returns {Cursor}
    */
-  find(selector: string | Record<string, any>, options?: any): Cursor<TDoc> {
+  find(selector?: string | Record<string, any>, options?: any): Cursor<TDoc> {
     let result;
     let docs: TDoc[] | undefined;
 
@@ -274,7 +288,7 @@ export class Collection<TDoc = any> {
 
       if (docs) docs = [docs];
     } else {
-      docs = this._collection.find(selector, options);
+      docs = this._collection.find(selector as any, options);
     }
     result = new Cursor<TDoc>(
       this,
@@ -327,7 +341,7 @@ export class Collection<TDoc = any> {
    * @returns {Cursor}
    */
   findOne(
-    selector: string | Record<string, any>,
+    selector?: string | Record<string, any>,
     options?: any
   ): TDoc | undefined {
     let result = this.find(selector, options);
