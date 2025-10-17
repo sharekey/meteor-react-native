@@ -11,4 +11,5 @@ Object.assign(MeteorAugmented, User);
 const { useTracker, withTracker, Mongo, ReactiveDict } = MeteorAugmented;
 
 export { useTracker, Accounts, withTracker, Mongo, ReactiveDict, Tracker };
+export { Vent } from './vent';
 export default MeteorAugmented;

@@ -7,6 +7,7 @@ import Data from './Data';
 import Mongo from './Mongo';
 import { Collection, getObservers, localCollections } from './Collection';
 import call from './Call';
+import Vent from './vent/Vent';
 
 import withTracker from './components/withTracker';
 import useTracker from './components/useTracker';
@@ -98,6 +99,7 @@ const Meteor: MeteorBase = {
     if (Data.ddp) {
       Data.ddp.disconnect();
     }
+    Vent.reset();
   },
   /** Ensure DDP instance is available before using it */
   requireDdp(): DDP {
@@ -185,6 +187,7 @@ const Meteor: MeteorBase = {
 
     Data.ddp = ddp;
     this.ddp = ddp;
+    Vent.attach(ddp);
 
     Data.ddp.on('connected', (info) => {
       const sessionReused = !!(info && info.sessionReused);
@@ -593,3 +596,5 @@ const getNetInfo = (NetInfo?: any) =>
   NetInfo ? NetInfo : require('@react-native-community/netinfo').default;
 
 export default Meteor;
+
+Vent.configure(Meteor);
