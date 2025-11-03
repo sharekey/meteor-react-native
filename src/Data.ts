@@ -64,6 +64,7 @@ type DataEventName =
   | 'loggingOut'
   | 'change'
   | 'onLogin'
+  | 'onLogout'
   | 'onLoginFailure';
 
 const Data = {

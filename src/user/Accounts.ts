@@ -136,6 +136,13 @@ class AccountsPassword {
   };
 
   /**
+   * Register a callback to be called after the user logs out.
+   */
+  onLogout = (cb: (...args: any[]) => void) => {
+    Data.on('onLogout', cb);
+  };
+
+  /**
    * Verify if the logged user has 2FA enabled
    */
   has2faEnabled = (

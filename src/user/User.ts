@@ -66,6 +66,7 @@ const User = {
 
     User._userIdSaved = null;
     User._endLoggingOut();
+    Data.notify('onLogout');
   },
 
   loginWithPassword(
