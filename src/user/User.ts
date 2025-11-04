@@ -79,6 +79,20 @@ const User = {
   },
 
   logout(callback?: (err?: any) => void): void {
+    const hasSession =
+      !!this._reactiveDict.get('_userIdSaved') ||
+      !!User._userIdSaved ||
+      !!(Data as any)._tokenIdSaved;
+
+    if (!hasSession) {
+      this._isTokenLogin = false;
+      if (User._isLoggingOut) {
+        User._endLoggingOut();
+      }
+      if (typeof callback === 'function') callback();
+      return;
+    }
+
     this._isTokenLogin = false;
     User._startLoggingOut();
     Meteor.call('logout', (err: any) => {
@@ -253,51 +267,58 @@ const User = {
   },
 
   _loginWithToken(
-    value: string | null,
+    value: string | null | undefined,
     callback?: (err?: any, result?: any) => void
   ): void {
-    if (!value) {
+    const token =
+      typeof value === 'string' && value.trim().length > 0 ? value : null;
+
+    if (!token) {
       Meteor.isVerbose &&
         console.info(
-          'User._loginWithToken::: parameter value is null, will not save as token.'
+          'User._loginWithToken::: token is missing, skipping resume.'
         );
-    } else {
-      (Data as any)._tokenIdSaved = value;
+      (Data as any)._tokenIdSaved = null;
+      this._isTokenLogin = false;
+      if (this._isCallingLogin) {
+        this._isCallingLogin = false;
+      }
+      User._endLoggingIn();
+      return;
     }
 
-    if (value !== null) {
-      this._isTokenLogin = true;
-      Meteor.isVerbose && console.info('User._loginWithToken::: token:', value);
-      if (this._isCallingLogin) {
-        return;
-      }
-      this._isCallingLogin = true;
-      User._startLoggingIn();
-      Meteor.call('login', { resume: value }, (err: any, result: any) => {
-        this._isCallingLogin = false;
-        if (err?.error == 'too-many-requests') {
-          Meteor.isVerbose &&
-            console.info(
-              'User._handleLoginCallback::: too many requests retrying:',
-              err
-            );
-          const time =
-            (err as any).details?.timeToReset || (err as any).timeToReset;
-          setTimeout(() => {
-            if (User._userIdSaved) return;
-            this._loadInitialUser();
-          }, (time || 0) + 100);
-        } else if (err?.error === 403) {
-          User.logout();
-        } else {
-          User._handleLoginCallback(err, result);
-        }
-        callback?.(err, result);
-      });
-    } else {
-      Meteor.isVerbose && console.info('User._loginWithToken::: token is null');
-      User._endLoggingIn();
+    (Data as any)._tokenIdSaved = token;
+    this._isTokenLogin = true;
+    Meteor.isVerbose && console.info('User._loginWithToken::: token:', token);
+    if (this._isCallingLogin) {
+      return;
     }
+    this._isCallingLogin = true;
+    User._startLoggingIn();
+    Meteor.call('login', { resume: token }, (err: any, result: any) => {
+      this._isCallingLogin = false;
+      if (err?.error == 'too-many-requests') {
+        Meteor.isVerbose &&
+          console.info(
+            'User._handleLoginCallback::: too many requests retrying:',
+            err
+          );
+        const time =
+          (err as any).details?.timeToReset || (err as any).timeToReset;
+        setTimeout(() => {
+          if (User._userIdSaved) return;
+          this._loadInitialUser();
+        }, (time || 0) + 100);
+      } else if (err?.error === 403) {
+        this._isTokenLogin = false;
+        User.handleLogout();
+        Data.notify('onLoginFailure', err);
+        Data.notify('change');
+      } else {
+        User._handleLoginCallback(err, result);
+      }
+      callback?.(err, result);
+    });
   },
 
   getAuthToken(): string | null {
@@ -308,9 +329,9 @@ const User = {
     this._timeout = 500;
 
     User._startLoggingIn();
-    let value: string | null = null;
-    let storedUserId: string | null = null;
-    let storedExpiration: string | null = null;
+    let value: string | null | undefined = null;
+    let storedUserId: string | null | undefined = null;
+    let storedExpiration: string | null | undefined = null;
     try {
       value = await Data._options.KeyStorage.getItem(TOKEN_KEY);
       storedUserId = await Data._options.KeyStorage.getItem(USER_ID_KEY);
@@ -321,7 +342,7 @@ const User = {
       console.warn('KeyStorage error: ' + error.message);
     } finally {
       // Seed reactive values so Meteor.userId() and Meteor.loginTokenExpires() are available immediately
-      if (storedUserId !== null) {
+      if (storedUserId != null) {
         this._reactiveDict.set('_userIdSaved', storedUserId);
         User._userIdSaved = storedUserId;
       } else {
@@ -329,7 +350,7 @@ const User = {
         User._userIdSaved = null;
       }
 
-      if (storedExpiration !== null) {
+      if (storedExpiration != null) {
         this._reactiveDict.set('_loginTokenExpires', storedExpiration);
         User._tokenExpirationSaved = storedExpiration;
       } else {
@@ -337,7 +358,7 @@ const User = {
         User._tokenExpirationSaved = null;
       }
 
-      User._loginWithToken(value);
+      User._loginWithToken(value ?? null);
     }
   },
 };
