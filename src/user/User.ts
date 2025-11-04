@@ -80,12 +80,12 @@ const User = {
 
   logout(callback?: (err?: any) => void): void {
     const hasSession =
-      !!this._reactiveDict.get('_userIdSaved') ||
+      !!User._reactiveDict.get('_userIdSaved') ||
       !!User._userIdSaved ||
       !!(Data as any)._tokenIdSaved;
 
     if (!hasSession) {
-      this._isTokenLogin = false;
+      User._isTokenLogin = false;
       if (User._isLoggingOut) {
         User._endLoggingOut();
       }
@@ -93,7 +93,7 @@ const User = {
       return;
     }
 
-    this._isTokenLogin = false;
+    User._isTokenLogin = false;
     User._startLoggingOut();
     Meteor.call('logout', (err: any) => {
       User.handleLogout();
