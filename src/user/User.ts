@@ -8,6 +8,8 @@ import type { Collection } from '../Collection';
 type UserDoc<T> = { _id: string } & Record<string, any> & T;
 
 const TOKEN_KEY = 'Meteor.loginToken';
+const TOKEN_EXPIRATION_KEY = 'Meteor.loginTokenExpires';
+const USER_ID_KEY = 'Meteor.userId';
 const Users = new (Mongo as any).Collection('users') as Collection<
   UserDoc<unknown>
 >;
@@ -38,6 +40,32 @@ const User = {
   _isLoggingIn: true,
   _isLoggingOut: false,
   _userIdSaved: null as string | null,
+  _tokenExpirationSaved: null as string | null,
+
+  /**
+   * Normalize a token expiration value (number, string, Date, or {$date}) to an ISO string or null.
+   */
+  _normalizeTokenExpiration(exp: any): string | null {
+    if (!exp) return null;
+    let d: Date | null = null;
+    if (exp instanceof Date) d = exp;
+    else if (typeof exp === 'number') d = new Date(exp);
+    else if (typeof exp === 'string') d = new Date(exp);
+    else if (typeof exp === 'object' && (exp as any).$date)
+      d = new Date((exp as any).$date);
+
+    if (!d || isNaN(d.getTime())) return null;
+    return d.toISOString();
+  },
+
+  loginTokenExpires(): Date | null {
+    const iso =
+      (this._reactiveDict.get('_loginTokenExpires') as string | null) ??
+      User._tokenExpirationSaved;
+    if (!iso) return null;
+    const d = new Date(iso);
+    return isNaN(d.getTime()) ? null : d;
+  },
   _timeout: 50,
   _isTokenLogin: false,
   _isCallingLogin: false,
@@ -61,10 +89,14 @@ const User = {
 
   handleLogout(): void {
     Data._options.KeyStorage.removeItem(TOKEN_KEY);
+    Data._options.KeyStorage.removeItem(TOKEN_EXPIRATION_KEY);
+    Data._options.KeyStorage.removeItem(USER_ID_KEY);
     (Data as any)._tokenIdSaved = null;
     this._reactiveDict.set('_userIdSaved', null);
+    this._reactiveDict.set('_loginTokenExpires', null);
 
     User._userIdSaved = null;
+    User._tokenExpirationSaved = null;
     User._endLoggingOut();
     Data.notify('onLogout');
   },
@@ -173,8 +205,26 @@ const User = {
           result?.id
         );
       }
+      const normalizedExpiration =
+        User._normalizeTokenExpiration(result?.tokenExpires) ?? null;
+
       Data._options.KeyStorage.setItem(TOKEN_KEY, result.token);
+      if (result?.id !== null) {
+        Data._options.KeyStorage.setItem(USER_ID_KEY, String(result.id));
+      } else {
+        Data._options.KeyStorage.removeItem(USER_ID_KEY);
+      }
+      if (normalizedExpiration) {
+        Data._options.KeyStorage.setItem(
+          TOKEN_EXPIRATION_KEY,
+          normalizedExpiration
+        );
+      } else {
+        Data._options.KeyStorage.removeItem(TOKEN_EXPIRATION_KEY);
+      }
       (Data as any)._tokenIdSaved = result.token;
+      User._tokenExpirationSaved = normalizedExpiration;
+      this._reactiveDict.set('_loginTokenExpires', normalizedExpiration);
       this._reactiveDict.set('_userIdSaved', result.id);
       User._userIdSaved = result.id;
       User._endLoggingIn();
@@ -259,11 +309,34 @@ const User = {
 
     User._startLoggingIn();
     let value: string | null = null;
+    let storedUserId: string | null = null;
+    let storedExpiration: string | null = null;
     try {
       value = await Data._options.KeyStorage.getItem(TOKEN_KEY);
+      storedUserId = await Data._options.KeyStorage.getItem(USER_ID_KEY);
+      storedExpiration = await Data._options.KeyStorage.getItem(
+        TOKEN_EXPIRATION_KEY
+      );
     } catch (error: any) {
       console.warn('KeyStorage error: ' + error.message);
     } finally {
+      // Seed reactive values so Meteor.userId() and Meteor.loginTokenExpires() are available immediately
+      if (storedUserId !== null) {
+        this._reactiveDict.set('_userIdSaved', storedUserId);
+        User._userIdSaved = storedUserId;
+      } else {
+        this._reactiveDict.set('_userIdSaved', null);
+        User._userIdSaved = null;
+      }
+
+      if (storedExpiration !== null) {
+        this._reactiveDict.set('_loginTokenExpires', storedExpiration);
+        User._tokenExpirationSaved = storedExpiration;
+      } else {
+        this._reactiveDict.set('_loginTokenExpires', null);
+        User._tokenExpirationSaved = null;
+      }
+
       User._loginWithToken(value);
     }
   },
