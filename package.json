@@ -1,6 +1,6 @@
 {
   "name": "@meteorrn/core",
-  "version": "2.14.0",
+  "version": "2.14.1",
   "description": "Meteor Client for React Native",
   "type": "module",
   "main": "dist/src/index.js",
