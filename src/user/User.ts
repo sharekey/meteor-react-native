@@ -31,10 +31,14 @@ const User = {
   },
 
   userId(): string | null {
-    const user_id = this._reactiveDict.get('_userIdSaved');
-    if (!user_id) return null;
-    const user = Users.findOne(user_id);
-    return user?._id ?? null;
+    const user_id =
+      (this._reactiveDict.get('_userIdSaved') as string | null) ??
+      User._userIdSaved;
+
+    if (typeof user_id === 'string' && user_id.length > 0) {
+      return user_id;
+    }
+    return null;
   },
 
   _isLoggingIn: true,
