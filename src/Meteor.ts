@@ -189,6 +189,10 @@ const Meteor: MeteorBase = {
     this.ddp = ddp;
     Vent.attach(ddp);
 
+    if (typeof (this as any)._loadInitialUser === 'function') {
+      (this as any)._loadInitialUser({ skipLogin: true });
+    }
+
     Data.ddp.on('connected', (info) => {
       const sessionReused = !!(info && info.sessionReused);
 

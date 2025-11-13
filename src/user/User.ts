@@ -325,41 +325,55 @@ const User = {
     return (Data as any)._tokenIdSaved || null;
   },
 
-  async _loadInitialUser(): Promise<void> {
-    this._timeout = 500;
-
-    User._startLoggingIn();
-    let value: string | null | undefined = null;
+  async _syncReactiveAuthState(): Promise<string | null> {
+    let token: string | null | undefined = null;
     let storedUserId: string | null | undefined = null;
     let storedExpiration: string | null | undefined = null;
+
     try {
-      value = await Data._options.KeyStorage.getItem(TOKEN_KEY);
+      token = await Data._options.KeyStorage.getItem(TOKEN_KEY);
       storedUserId = await Data._options.KeyStorage.getItem(USER_ID_KEY);
       storedExpiration = await Data._options.KeyStorage.getItem(
         TOKEN_EXPIRATION_KEY
       );
     } catch (error: any) {
       console.warn('KeyStorage error: ' + error.message);
-    } finally {
-      // Seed reactive values so Meteor.userId() and Meteor.loginTokenExpires() are available immediately
-      if (storedUserId != null) {
-        this._reactiveDict.set('_userIdSaved', storedUserId);
-        User._userIdSaved = storedUserId;
-      } else {
-        this._reactiveDict.set('_userIdSaved', null);
-        User._userIdSaved = null;
-      }
-
-      if (storedExpiration != null) {
-        this._reactiveDict.set('_loginTokenExpires', storedExpiration);
-        User._tokenExpirationSaved = storedExpiration;
-      } else {
-        this._reactiveDict.set('_loginTokenExpires', null);
-        User._tokenExpirationSaved = null;
-      }
-
-      User._loginWithToken(value ?? null);
     }
+
+    // Seed reactive values so Meteor.userId() and Meteor.loginTokenExpires() are available immediately
+    if (storedUserId != null) {
+      this._reactiveDict.set('_userIdSaved', storedUserId);
+      User._userIdSaved = storedUserId;
+    } else {
+      this._reactiveDict.set('_userIdSaved', null);
+      User._userIdSaved = null;
+    }
+
+    if (storedExpiration != null) {
+      this._reactiveDict.set('_loginTokenExpires', storedExpiration);
+      User._tokenExpirationSaved = storedExpiration;
+    } else {
+      this._reactiveDict.set('_loginTokenExpires', null);
+      User._tokenExpirationSaved = null;
+    }
+
+    return token ?? null;
+  },
+
+  async _loadInitialUser(options?: { skipLogin?: boolean }): Promise<void> {
+    this._timeout = 500;
+
+    if (!options?.skipLogin) {
+      User._startLoggingIn();
+    }
+
+    const token = await this._syncReactiveAuthState();
+
+    if (options?.skipLogin) {
+      return;
+    }
+
+    User._loginWithToken(token);
   },
 };
 
