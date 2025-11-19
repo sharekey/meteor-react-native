@@ -14,6 +14,23 @@ import useTracker from './components/useTracker';
 
 import ReactiveDict from './ReactiveDict';
 
+type DdpErrorPayload = {
+  error?: number | string;
+  reason?: string;
+  details?: any;
+};
+
+function toMeteorStyleError(
+  payload?: DdpErrorPayload | null
+): Error | undefined {
+  if (!payload) return undefined;
+  const err = new Error(payload.reason || 'Subscription failed');
+  (err as any).error = payload.error;
+  (err as any).reason = payload.reason;
+  (err as any).details = payload.details;
+  return err;
+}
+
 export interface MeteorBase {
   isVerbose: boolean;
   logger: (msg?: any, ...args: any[]) => void;
@@ -425,10 +442,11 @@ const Meteor: MeteorBase = {
               // no-op
             }
           }
+          const formattedError = toMeteorStyleError(message.error);
           // If server ended the subscription with an error, surface it
           if (message.error && typeof sub.errorCallback === 'function') {
             try {
-              sub.errorCallback(message.error);
+              sub.errorCallback(formattedError);
             } catch (e) {
               console.error('Error in subscription onError callback', e);
             }
@@ -437,7 +455,7 @@ const Meteor: MeteorBase = {
           // Always notify onStop when a subscription ends on the server
           if (typeof sub.stopCallback === 'function') {
             try {
-              sub.stopCallback(message.error);
+              sub.stopCallback(formattedError);
             } catch (e) {
               console.error('Error in subscription onStop callback', e);
             }
@@ -528,12 +546,12 @@ const Meteor: MeteorBase = {
       existing.inactive = false;
 
       if (callbacks.onReady) {
-        // If the sub is not already ready, replace any ready callback with the
-        // one provided now. (It's not really clear what users would expect for
-        // an onReady callback inside an autorun; the semantics we provide is
-        // that at the time the sub first becomes ready, we call the last
-        // onReady callback provided, if any.)
-        if (!existing.ready) existing.readyCallback = callbacks.onReady;
+        // If the sub is already ready, fire immediately; otherwise store latest callback.
+        if (existing.ready) {
+          callbacks.onReady();
+        } else {
+          existing.readyCallback = callbacks.onReady;
+        }
       }
       if (callbacks.onStop) {
         existing.stopCallback = callbacks.onStop;
