@@ -83,26 +83,26 @@ const User = {
   },
 
   logout(callback?: (err?: any) => void): void {
-    const hasSession =
-      !!User._reactiveDict.get('_userIdSaved') ||
-      !!User._userIdSaved ||
-      !!(Data as any)._tokenIdSaved;
-
-    if (!hasSession) {
-      User._isTokenLogin = false;
-      if (User._isLoggingOut) {
+    const finish = (err?: any) => {
+      if (err) {
         User._endLoggingOut();
+        if (typeof callback === 'function') callback(err);
+        return;
       }
+      User.handleLogout();
       if (typeof callback === 'function') callback();
-      return;
-    }
+    };
 
     User._isTokenLogin = false;
     User._startLoggingOut();
-    Meteor.call('logout', (err: any) => {
-      User.handleLogout();
-      if (typeof callback === 'function') callback(err);
-    });
+
+    try {
+      Meteor.call('logout', (err: any) => {
+        finish(err ?? undefined);
+      });
+    } catch (error) {
+      finish(error);
+    }
   },
 
   handleLogout(): void {
