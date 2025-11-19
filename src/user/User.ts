@@ -273,55 +273,69 @@ const User = {
   _loginWithToken(
     value: string | null | undefined,
     callback?: (err?: any, result?: any) => void
-  ): void {
+  ): Promise<void> {
     const token =
       typeof value === 'string' && value.trim().length > 0 ? value : null;
 
-    if (!token) {
-      Meteor.isVerbose &&
-        console.info(
-          'User._loginWithToken::: token is missing, skipping resume.'
-        );
-      (Data as any)._tokenIdSaved = null;
-      this._isTokenLogin = false;
-      if (this._isCallingLogin) {
-        this._isCallingLogin = false;
-      }
-      User._endLoggingIn();
-      return;
-    }
-
-    (Data as any)._tokenIdSaved = token;
-    this._isTokenLogin = true;
-    Meteor.isVerbose && console.info('User._loginWithToken::: token:', token);
-    if (this._isCallingLogin) {
-      return;
-    }
-    this._isCallingLogin = true;
-    User._startLoggingIn();
-    Meteor.call('login', { resume: token }, (err: any, result: any) => {
-      this._isCallingLogin = false;
-      if (err?.error == 'too-many-requests') {
+    return new Promise((resolve) => {
+      if (!token) {
         Meteor.isVerbose &&
           console.info(
-            'User._handleLoginCallback::: too many requests retrying:',
-            err
+            'User._loginWithToken::: token is missing, skipping resume.'
           );
-        const time =
-          (err as any).details?.timeToReset || (err as any).timeToReset;
-        setTimeout(() => {
-          if (User._userIdSaved) return;
-          this._loadInitialUser();
-        }, (time || 0) + 100);
-      } else if (err?.error === 403) {
+        (Data as any)._tokenIdSaved = null;
         this._isTokenLogin = false;
-        User.handleLogout();
-        Data.notify('onLoginFailure', err);
-        Data.notify('change');
-      } else {
-        User._handleLoginCallback(err, result);
+        if (this._isCallingLogin) {
+          this._isCallingLogin = false;
+        }
+        User._endLoggingIn();
+        resolve();
+        return;
       }
-      callback?.(err, result);
+
+      if (this._isCallingLogin) {
+        resolve();
+        return;
+      }
+
+      (Data as any)._tokenIdSaved = token;
+      this._isTokenLogin = true;
+      Meteor.isVerbose && console.info('User._loginWithToken::: token:', token);
+
+      this._isCallingLogin = true;
+      User._startLoggingIn();
+
+      const respond = (err: any, result: any) => {
+        this._isCallingLogin = false;
+        if (err?.error == 'too-many-requests') {
+          Meteor.isVerbose &&
+            console.info(
+              'User._handleLoginCallback::: too many requests retrying:',
+              err
+            );
+          const time =
+            (err as any).details?.timeToReset || (err as any).timeToReset;
+          setTimeout(() => {
+            if (User._userIdSaved) return;
+            this._loadInitialUser();
+          }, (time || 0) + 100);
+        } else if (err?.error === 403) {
+          this._isTokenLogin = false;
+          User.handleLogout();
+          Data.notify('onLoginFailure', err);
+          Data.notify('change');
+        } else {
+          User._handleLoginCallback(err, result);
+        }
+        callback?.(err, result);
+        resolve();
+      };
+
+      try {
+        Meteor.call('login', { resume: token }, respond);
+      } catch (error) {
+        respond(error, undefined);
+      }
     });
   },
 
@@ -377,7 +391,7 @@ const User = {
       return;
     }
 
-    User._loginWithToken(token);
+    await User._loginWithToken(token);
   },
 };
 

@@ -189,8 +189,17 @@ const Meteor: MeteorBase = {
     this.ddp = ddp;
     Vent.attach(ddp);
 
-    if (typeof (this as any)._loadInitialUser === 'function') {
-      (this as any)._loadInitialUser({ skipLogin: true });
+    const loadInitialUser =
+      typeof (this as any)._loadInitialUser === 'function'
+        ? (this as any)._loadInitialUser.bind(this)
+        : null;
+
+    if (loadInitialUser) {
+      Promise.resolve(loadInitialUser({ skipLogin: true })).catch((err) => {
+        if (this.isVerbose) {
+          console.warn('Failed to seed cached login state', err);
+        }
+      });
     }
 
     Data.ddp.on('connected', (info) => {
@@ -215,9 +224,22 @@ const Meteor: MeteorBase = {
       }
 
       if (!sessionReused) {
-        (this as any)._loadInitialUser().then(() => {
-          this._subscriptionsRestart();
-        });
+        const resumePromise = loadInitialUser
+          ? Promise.resolve(loadInitialUser())
+          : Promise.resolve();
+
+        resumePromise
+          .catch((err) => {
+            if (this.isVerbose) {
+              console.error(
+                'Failed to resume user session after reconnect',
+                err
+              );
+            }
+          })
+          .finally(() => {
+            this._subscriptionsRestart();
+          });
       }
       this._reactiveDict.set('connected', true);
       this.connected = true;
