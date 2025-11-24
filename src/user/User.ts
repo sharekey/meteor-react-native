@@ -304,6 +304,16 @@ const User = {
             'User._loginWithToken::: error:',
             (err as any).error || (err as any).reason || err
           );
+          Meteor.logger(
+            'User._loginWithToken::: error payload:',
+            (() => {
+              try {
+                return JSON.stringify(err);
+              } catch (e) {
+                return err;
+              }
+            })()
+          );
         }
         this._isCallingLogin = false;
         const isRateLimited = err?.error == 'too-many-requests';
