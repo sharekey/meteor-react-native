@@ -216,7 +216,7 @@ const User = {
   _handleLoginCallback(err: any, result: any): void {
     if (!err) {
       if (Meteor.isVerbose) {
-        console.info(
+        Meteor.logger(
           'User._handleLoginCallback::: token:',
           result?.token,
           'id:',
@@ -250,15 +250,7 @@ const User = {
       Data.notify('onLogin');
     } else {
       Meteor.isVerbose &&
-        console.info('User._handleLoginCallback::: error:', err);
-      if (this._isTokenLogin) {
-        setTimeout(() => {
-          if (User._userIdSaved) return;
-          this._timeout *= 2;
-          if ((Meteor as any).user()) return;
-          User._loginWithToken(User._userIdSaved);
-        }, this._timeout);
-      }
+        Meteor.logger('User._handleLoginCallback::: error:', err);
       // Signify we aren't logging in any more after a few seconds
       if (this._timeout > 2000) {
         User._endLoggingIn();
@@ -280,7 +272,7 @@ const User = {
     return new Promise((resolve) => {
       if (!token) {
         Meteor.isVerbose &&
-          console.info(
+          Meteor.logger(
             'User._loginWithToken::: token is missing, skipping resume.'
           );
         (Data as any)._tokenIdSaved = null;
@@ -300,29 +292,59 @@ const User = {
 
       (Data as any)._tokenIdSaved = token;
       this._isTokenLogin = true;
-      Meteor.isVerbose && console.info('User._loginWithToken::: token:', token);
+      Meteor.isVerbose &&
+        Meteor.logger('User._loginWithToken::: token:', token);
 
       this._isCallingLogin = true;
       User._startLoggingIn();
 
       const respond = (err: any, result: any) => {
+        if (Meteor.isVerbose && err) {
+          Meteor.logger(
+            'User._loginWithToken::: error:',
+            (err as any).error || (err as any).reason || err
+          );
+        }
         this._isCallingLogin = false;
-        if (err?.error == 'too-many-requests') {
+        const isRateLimited = err?.error == 'too-many-requests';
+        const isResumeRejection =
+          err?.error === 403 || err?.error === 'not-authorized';
+
+        if (isRateLimited) {
           Meteor.isVerbose &&
-            console.info(
+            Meteor.logger(
               'User._handleLoginCallback::: too many requests retrying:',
               err
             );
           const time =
             (err as any).details?.timeToReset || (err as any).timeToReset;
+          User._isTokenLogin = false;
+          User._endLoggingIn();
           setTimeout(() => {
             if (User._userIdSaved) return;
             this._loadInitialUser();
           }, (time || 0) + 100);
-        } else if (err?.error === 403) {
+          Data.notify('onLoginFailure', err);
+          Data.notify('change');
+        } else if (isResumeRejection) {
           this._isTokenLogin = false;
           User.handleLogout();
+          User._endLoggingIn();
           Data.notify('onLoginFailure', err);
+          Data.notify('change');
+        } else if (err) {
+          // Treat other errors (e.g. transient connection issues) as retryable
+          this._isTokenLogin = true;
+          User._endLoggingIn();
+          Data.notify('onLoginFailure', err);
+
+          const retryToken = (Data as any)._tokenIdSaved || token;
+          const delay = this._timeout;
+          this._timeout = Math.min(this._timeout * 2, 8000);
+          setTimeout(() => {
+            if (User._userIdSaved || this._isCallingLogin) return;
+            this._loginWithToken(retryToken);
+          }, delay);
           Data.notify('change');
         } else {
           User._handleLoginCallback(err, result);

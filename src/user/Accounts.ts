@@ -33,7 +33,7 @@ class AccountsPassword {
     User._startLoggingIn();
     call('createUser', options, (err: any, result: any) => {
       Meteor.isVerbose &&
-        console.info('Accounts.createUser::: err:', err, 'result:', result);
+        Meteor.logger('Accounts.createUser::: err:', err, 'result:', result);
 
       User._endLoggingIn();
       User._handleLoginCallback(err, result);
@@ -101,7 +101,7 @@ class AccountsPassword {
       hashPassword(newPassword),
       (err: any, result: any) => {
         Meteor.isVerbose &&
-          console.info(
+          Meteor.logger(
             'Accounts.resetPassword::: err:',
             err,
             'result:',

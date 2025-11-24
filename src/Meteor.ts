@@ -233,7 +233,7 @@ const Meteor: MeteorBase = {
       }
 
       if (this.isVerbose) {
-        console.info(
+        this.logger(
           sessionReused
             ? 'Connected to DDP server (session resumed).'
             : 'Connected to DDP server.'
@@ -271,7 +271,7 @@ const Meteor: MeteorBase = {
       Data.notify('change');
 
       if (this.isVerbose) {
-        console.info('Disconnected from DDP server.');
+        this.logger('Disconnected from DDP server.');
       }
 
       // Mark subscriptions as ready=false
