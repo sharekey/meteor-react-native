@@ -270,6 +270,14 @@ const User = {
       typeof value === 'string' && value.trim().length > 0 ? value : null;
 
     return new Promise((resolve) => {
+      const safeStringify = (payload: any) => {
+        try {
+          return JSON.stringify(payload);
+        } catch (e) {
+          return String(payload);
+        }
+      };
+
       if (!token) {
         Meteor.isVerbose &&
           Meteor.logger(
@@ -299,54 +307,66 @@ const User = {
       User._startLoggingIn();
 
       const respond = (err: any, result: any) => {
-        if (Meteor.isVerbose && err) {
+        if (Meteor.isVerbose) {
           Meteor.logger(
-            'User._loginWithToken::: error:',
-            (err as any).error || (err as any).reason || err
-          );
-          Meteor.logger(
-            'User._loginWithToken::: error payload:',
-            (() => {
-              try {
-                return JSON.stringify(err);
-              } catch (e) {
-                return err;
-              }
-            })()
+            `User._loginWithToken::: respond err=${safeStringify(
+              err
+            )} result=${safeStringify(result)}`
           );
         }
         this._isCallingLogin = false;
-        const isRateLimited = err?.error == 'too-many-requests';
+        let loginError = err;
+        const missingToken =
+          !result ||
+          typeof (result as any).token !== 'string' ||
+          !(result as any).token;
+
+        if (!loginError && missingToken) {
+          loginError = {
+            error: 'not-authorized',
+            reason: 'Login response missing token',
+            details: { result },
+          };
+          Meteor.isVerbose &&
+            Meteor.logger(
+              `User._loginWithToken::: synthesized error for missing token ${safeStringify(
+                loginError
+              )}`
+            );
+        }
+
+        const isRateLimited = loginError?.error == 'too-many-requests';
         const isResumeRejection =
-          err?.error === 403 || err?.error === 'not-authorized';
+          loginError?.error === 403 || loginError?.error === 'not-authorized';
 
         if (isRateLimited) {
           Meteor.isVerbose &&
             Meteor.logger(
               'User._handleLoginCallback::: too many requests retrying:',
-              err
+              loginError
             );
           const time =
-            (err as any).details?.timeToReset || (err as any).timeToReset;
+            (loginError as any).details?.timeToReset ||
+            (loginError as any).timeToReset;
           User._isTokenLogin = false;
           User._endLoggingIn();
           setTimeout(() => {
             if (User._userIdSaved) return;
             this._loadInitialUser();
           }, (time || 0) + 100);
-          Data.notify('onLoginFailure', err);
+          Data.notify('onLoginFailure', loginError);
           Data.notify('change');
         } else if (isResumeRejection) {
           this._isTokenLogin = false;
           User.handleLogout();
           User._endLoggingIn();
-          Data.notify('onLoginFailure', err);
+          Data.notify('onLoginFailure', loginError);
           Data.notify('change');
-        } else if (err) {
+        } else if (loginError) {
           // Treat other errors (e.g. transient connection issues) as retryable
           this._isTokenLogin = true;
           User._endLoggingIn();
-          Data.notify('onLoginFailure', err);
+          Data.notify('onLoginFailure', loginError);
 
           const retryToken = (Data as any)._tokenIdSaved || token;
           const delay = this._timeout;
@@ -357,9 +377,9 @@ const User = {
           }, delay);
           Data.notify('change');
         } else {
-          User._handleLoginCallback(err, result);
+          User._handleLoginCallback(loginError, result);
         }
-        callback?.(err, result);
+        callback?.(loginError, result);
         resolve();
       };
 
