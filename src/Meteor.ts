@@ -129,6 +129,9 @@ const Meteor: MeteorBase = {
     const ddp = this.requireDdp();
     for (var i in Data.subscriptions) {
       const sub = Data.subscriptions[i];
+      // Prevent delivering onStop during internal restart;
+      // will re-enable after new sub is created
+      sub.suppressOnStop = true;
       if (this.isVerbose) {
         try {
           this.logger({
@@ -145,6 +148,7 @@ const Meteor: MeteorBase = {
       ddp.unsub(sub.subIdRemember);
       this.removing[sub.subIdRemember] = true;
       sub.subIdRemember = ddp.sub(sub.name, sub.params);
+      sub.suppressOnStop = false;
     }
     // If we get a double restart, make sure we keep track and
     // remove it later
@@ -444,7 +448,11 @@ const Meteor: MeteorBase = {
           }
           const formattedError = toMeteorStyleError(message.error);
           // If server ended the subscription with an error, surface it
-          if (message.error && typeof sub.errorCallback === 'function') {
+          if (
+            message.error &&
+            typeof sub.errorCallback === 'function' &&
+            !sub.suppressOnStop
+          ) {
             try {
               sub.errorCallback(formattedError);
             } catch (e) {
@@ -453,7 +461,7 @@ const Meteor: MeteorBase = {
           }
 
           // Always notify onStop when a subscription ends on the server
-          if (typeof sub.stopCallback === 'function') {
+          if (typeof sub.stopCallback === 'function' && !sub.suppressOnStop) {
             try {
               sub.stopCallback(formattedError);
             } catch (e) {
@@ -544,6 +552,7 @@ const Meteor: MeteorBase = {
     if (existing) {
       id = existing.id;
       existing.inactive = false;
+      existing.suppressOnStop = false;
 
       if (callbacks.onReady) {
         // If the sub is already ready, fire immediately; otherwise store latest callback.
@@ -579,6 +588,7 @@ const Meteor: MeteorBase = {
         readyCallback: callbacks.onReady,
         stopCallback: callbacks.onStop,
         errorCallback: callbacks.onError,
+        suppressOnStop: false,
         stop: function () {
           const ddp = Meteor.requireDdp();
           ddp.unsub(this.subIdRemember);
