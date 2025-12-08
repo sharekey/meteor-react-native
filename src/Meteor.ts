@@ -39,6 +39,7 @@ export interface MeteorBase {
   Mongo: typeof Mongo;
   Tracker: typeof Tracker;
   EJSON: typeof EJSON;
+  _pendingSubscriptionsRestart?: boolean;
   ReactiveDict: typeof ReactiveDict;
   Collection: typeof Collection;
   collection(): never;
@@ -82,6 +83,7 @@ const Meteor: MeteorBase = {
   Mongo,
   Tracker,
   EJSON,
+  _pendingSubscriptionsRestart: false,
   ReactiveDict,
   Collection,
   collection() {
@@ -245,22 +247,16 @@ const Meteor: MeteorBase = {
       }
 
       if (!sessionReused) {
+        this._pendingSubscriptionsRestart = true;
         const resumePromise = loadInitialUser
           ? Promise.resolve(loadInitialUser())
           : Promise.resolve();
 
-        resumePromise
-          .catch((err) => {
-            if (this.isVerbose) {
-              console.error(
-                'Failed to resume user session after reconnect',
-                err
-              );
-            }
-          })
-          .finally(() => {
-            this._subscriptionsRestart();
-          });
+        resumePromise.catch((err) => {
+          if (this.isVerbose) {
+            console.error('Failed to resume user session after reconnect', err);
+          }
+        });
       }
       this._reactiveDict.set('connected', true);
       this.connected = true;
@@ -645,6 +641,17 @@ const Meteor: MeteorBase = {
     return handle;
   },
 };
+
+Data.on('onLogin', () => {
+  if (Meteor._pendingSubscriptionsRestart) {
+    Meteor._pendingSubscriptionsRestart = false;
+    Meteor._subscriptionsRestart();
+  }
+});
+
+Data.on('onLogout', () => {
+  Meteor._pendingSubscriptionsRestart = false;
+});
 
 const getNetInfo = (NetInfo?: any) =>
   NetInfo ? NetInfo : require('@react-native-community/netinfo').default;
