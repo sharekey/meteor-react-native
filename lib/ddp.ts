@@ -255,11 +255,13 @@ class DDP extends EventEmitter<DDPEventMap> {
     if (this.isVerbose) {
       this.socket.on('message:out', (outMessage) => {
         try {
-          const copy = { SEND: 'SEND', ...outMessage };
-          if (this.isPrivate && copy.params !== undefined) {
-            delete copy.params;
-          }
-          this.logger(copy);
+          const { params, ...rest } = outMessage as any;
+          const base = { SEND: 'SEND', ...rest };
+          this.logger(
+            this.isPrivate && params !== undefined
+              ? base
+              : { SEND: 'SEND', ...outMessage }
+          );
         } catch (e) {
           // no-op
         }
@@ -329,9 +331,8 @@ class DDP extends EventEmitter<DDPEventMap> {
           } else if (message.msg === 'result') {
             this.pendingMethods.delete(message.id);
             if (this.isPrivate) {
-              const copy = { ...message };
-              if (copy.result !== undefined) delete copy.result;
-              this.logger(copy);
+              const { result, ...rest } = message as any;
+              this.logger(rest);
             } else {
               this.logger(message);
             }

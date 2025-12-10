@@ -107,8 +107,10 @@ export default class Queue<T extends object = any> {
       queueId: this.getId(element),
       ...(element as any),
     };
-    if (copy.params !== undefined) {
-      delete copy.params;
+    if ('params' in copy) {
+      const { params, ...rest } = copy;
+      this.logRaw(rest);
+      return;
     }
     this.logRaw(copy);
   }
