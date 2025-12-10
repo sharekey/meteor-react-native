@@ -198,6 +198,8 @@ class DDP extends EventEmitter<DDPEventMap> {
   reconnectInterval: number;
   messageQueue: Queue<any>;
   socket: Socket;
+  private activeSubs: Map<string, { name: string; params: any }>;
+  private pendingMethods: Map<string, any>;
   private _lastSessionId?: string;
   /**
    * Create a new DDP instance and runs the following init procedure:
@@ -223,6 +225,8 @@ class DDP extends EventEmitter<DDPEventMap> {
     this.logger = options.logger ?? console.info;
     this.isPrivate = options.isPrivate ?? true;
     this.isVerbose = options.isVerbose ?? false;
+    this.activeSubs = new Map();
+    this.pendingMethods = new Map();
 
     // Default `autoConnect` and `autoReconnect` to true
     this.autoConnect = options.autoConnect !== false;
@@ -232,6 +236,7 @@ class DDP extends EventEmitter<DDPEventMap> {
 
     this.messageQueue = new Queue((message) => {
       if (this.status === 'connected') {
+        this.trackSentMessage(message);
         this.socket.send(message);
         return true;
       } else {
@@ -273,7 +278,6 @@ class DDP extends EventEmitter<DDPEventMap> {
     this.socket.on('close', () => {
       this.isVerbose && this.logger('WebSocket connection closed');
       this.status = 'disconnected';
-      this.messageQueue.empty();
       this.emit('disconnected');
       if (this.autoReconnect) {
         // Schedule a reconnection
@@ -299,6 +303,7 @@ class DDP extends EventEmitter<DDPEventMap> {
             }`
           );
 
+        this.requeueActiveMessages();
         this.messageQueue.process();
 
         this.emit('connected', { sessionReused });
@@ -316,6 +321,7 @@ class DDP extends EventEmitter<DDPEventMap> {
           ) {
             this.logger(message);
           } else if (message.msg === 'result') {
+            this.pendingMethods.delete(message.id);
             if (this.isPrivate) {
               const copy = { ...message };
               if (copy.result !== undefined) delete copy.result;
@@ -340,6 +346,12 @@ class DDP extends EventEmitter<DDPEventMap> {
           } else {
             this.logger(message);
           }
+        }
+
+        if (message.msg === 'updated') {
+          message.methods.forEach((id: string) =>
+            this.pendingMethods.delete(id)
+          );
         }
 
         this.emit(message.msg as any, message as any);
@@ -424,6 +436,7 @@ class DDP extends EventEmitter<DDPEventMap> {
    */
   sub(name: string, params: any) {
     const id = uniqueId();
+    this.activeSubs.set(id, { name, params });
     this.messageQueue.push({
       msg: 'sub',
       id: id,
@@ -441,11 +454,54 @@ class DDP extends EventEmitter<DDPEventMap> {
    * @returns {string} the id of the prior sub message
    */
   unsub(id: string) {
+    this.activeSubs.delete(id);
     this.messageQueue.push({
       msg: 'unsub',
       id: id,
     });
     return id;
+  }
+
+  private trackSentMessage(message: any) {
+    if (message.msg === 'method') {
+      this.pendingMethods.set(message.id, message);
+    } else if (message.msg === 'sub') {
+      this.activeSubs.set(message.id, {
+        name: message.name,
+        params: message.params,
+      });
+    } else if (message.msg === 'unsub') {
+      this.activeSubs.delete(message.id);
+    }
+  }
+
+  private requeueActiveMessages() {
+    const loginReplay: any[] = [];
+    const otherMethodReplay: any[] = [];
+    const subReplay: any[] = [];
+
+    this.pendingMethods.forEach((message) => {
+      if (message.method === 'login') {
+        loginReplay.push(message);
+      } else {
+        otherMethodReplay.push(message);
+      }
+    });
+
+    this.activeSubs.forEach((sub, id) => {
+      subReplay.push({
+        msg: 'sub',
+        id,
+        name: sub.name,
+        params: sub.params,
+      });
+    });
+
+    const replay = [...loginReplay, ...otherMethodReplay, ...subReplay];
+
+    if (replay.length) {
+      this.messageQueue.prepend(replay);
+    }
   }
 }
 

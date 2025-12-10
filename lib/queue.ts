@@ -39,6 +39,16 @@ export default class Queue<T = any> {
   }
 
   /**
+   * Prepends a batch of elements to the front of the queue (preserves order)
+   * and triggers processing.
+   */
+  prepend(elements: T[]): void {
+    if (!elements.length) return;
+    this.queue = [...elements, ...this.queue];
+    this.process();
+  }
+
+  /**
    * Clears all elements from the queue
    */
   empty(): void {
