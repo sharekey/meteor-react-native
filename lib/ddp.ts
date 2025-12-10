@@ -234,15 +234,21 @@ class DDP extends EventEmitter<DDPEventMap> {
     this.reconnectInterval =
       options.reconnectInterval || DEFAULT_RECONNECT_INTERVAL;
 
-    this.messageQueue = new Queue((message) => {
-      if (this.status === 'connected') {
-        this.trackSentMessage(message);
-        this.socket.send(message);
-        return true;
-      } else {
-        return false;
+    this.messageQueue = new Queue(
+      (message) => {
+        if (this.status === 'connected') {
+          this.trackSentMessage(message);
+          this.socket.send(message);
+          return true;
+        } else {
+          return false;
+        }
+      },
+      {
+        logger: this.logger,
+        isVerbose: this.isVerbose,
       }
-    });
+    );
 
     this.socket = new Socket(options.SocketConstructor, options.endpoint);
 
@@ -417,12 +423,13 @@ class DDP extends EventEmitter<DDPEventMap> {
    */
   method(name: string, params: any) {
     const id = uniqueId();
-    this.messageQueue.push({
+    const message = {
       msg: 'method',
       id: id,
       method: name,
       params: params,
-    });
+    };
+    this.messageQueue.push(message);
     return id;
   }
 
@@ -437,12 +444,13 @@ class DDP extends EventEmitter<DDPEventMap> {
   sub(name: string, params: any) {
     const id = uniqueId();
     this.activeSubs.set(id, { name, params });
-    this.messageQueue.push({
+    const message = {
       msg: 'sub',
       id: id,
       name: name,
       params: params,
-    });
+    };
+    this.messageQueue.push(message);
     return id;
   }
 
@@ -455,10 +463,11 @@ class DDP extends EventEmitter<DDPEventMap> {
    */
   unsub(id: string) {
     this.activeSubs.delete(id);
-    this.messageQueue.push({
+    const message = {
       msg: 'unsub',
       id: id,
-    });
+    };
+    this.messageQueue.push(message);
     return id;
   }
 
