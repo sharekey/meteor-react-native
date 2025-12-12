@@ -246,7 +246,9 @@ const Meteor: MeteorBase = {
         );
       }
 
-      if (!sessionReused) {
+      if (sessionReused) {
+        this._subscriptionsRestart();
+      } else {
         this._pendingSubscriptionsRestart = true;
         const resumePromise = loadInitialUser
           ? Promise.resolve(loadInitialUser())
@@ -280,6 +282,9 @@ const Meteor: MeteorBase = {
         sub.ready = false;
         sub.readyDeps.changed();
       }
+
+      // Force a restart cycle for any pending subscriptions on the next connect
+      this._pendingSubscriptionsRestart = true;
 
       if (!Data.ddp?.autoReconnect) return;
 
@@ -538,10 +543,23 @@ const Meteor: MeteorBase = {
     // them all active.
 
     let existing: any = false;
+    const matchingSubs: any[] = [];
     for (let i in Data.subscriptions) {
       const sub = Data.subscriptions[i];
-      if (sub.inactive && sub.name === name && EJSON.equals(sub.params, params))
-        existing = sub;
+      if (sub.name === name && EJSON.equals(sub.params, params)) {
+        matchingSubs.push(sub);
+        if (sub.inactive) existing = sub;
+      }
+    }
+    if (!existing && matchingSubs.length) {
+      existing = matchingSubs[0];
+    }
+
+    // If we have a matching subscription that never became ready, stop it so callers
+    // get an onStop and a fresh sub is sent.
+    if (existing && !existing.ready) {
+      existing.stop();
+      existing = false;
     }
 
     let id;
@@ -632,10 +650,6 @@ const Meteor: MeteorBase = {
           }
         });
       });
-    } else {
-      if (Data.subscriptions[id]) {
-        Data.subscriptions[id].inactive = true;
-      }
     }
 
     return handle;
