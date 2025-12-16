@@ -329,8 +329,12 @@ class DDP extends EventEmitter<DDPEventMap> {
             }`
           );
 
-        // login will not be called, when session reused
-        this.shouldReplayActionsOnLogin = !sessionReused;
+        const hasPendingLogin = Array.from(this.pendingMethods.values()).some(
+          (pending) => pending?.method === 'login'
+        );
+
+        // login is not needed, when session reused, so we can call it now
+        this.shouldReplayActionsOnLogin = !sessionReused || hasPendingLogin;
         if (!this.shouldReplayActionsOnLogin) {
           this.requeueActiveMessages();
           this.messageQueue.process();
