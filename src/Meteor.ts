@@ -247,9 +247,32 @@ const Meteor: MeteorBase = {
       }
 
       if (sessionReused) {
-        this._subscriptionsRestart();
+        const ddp = this.requireDdp();
+        const toRestart: string[] = [];
+
+        Object.keys(Data.subscriptions).forEach((id) => {
+          const sub = Data.subscriptions[id];
+          if (sub.wasReady) {
+            sub.ready = true;
+            sub.readyDeps.changed();
+          } else {
+            toRestart.push(id);
+          }
+        });
+
+        toRestart.forEach((id) => {
+          const sub = Data.subscriptions[id];
+          if ((sub.restartAttempts ?? 0) >= 3) {
+            return;
+          }
+          sub.restartAttempts = (sub.restartAttempts ?? 0) + 1;
+          sub.suppressOnStop = true;
+          ddp.unsub(sub.subIdRemember);
+          this.removing[sub.subIdRemember] = true;
+          sub.subIdRemember = ddp.sub(sub.name, sub.params);
+          sub.suppressOnStop = false;
+        });
       } else {
-        this._pendingSubscriptionsRestart = true;
         const resumePromise = loadInitialUser
           ? Promise.resolve(loadInitialUser())
           : Promise.resolve();
@@ -279,12 +302,10 @@ const Meteor: MeteorBase = {
       // Mark subscriptions as ready=false
       for (var i in Data.subscriptions) {
         const sub = Data.subscriptions[i];
+        sub.wasReady = !!sub.ready;
         sub.ready = false;
         sub.readyDeps.changed();
       }
-
-      // Force a restart cycle for any pending subscriptions on the next connect
-      this._pendingSubscriptionsRestart = true;
 
       if (!Data.ddp?.autoReconnect) return;
 
@@ -352,6 +373,7 @@ const Meteor: MeteorBase = {
           }
 
           sub.ready = true;
+          sub.wasReady = true;
           sub.readyDeps.changed();
           sub.readyCallback && sub.readyCallback();
         }
@@ -598,6 +620,8 @@ const Meteor: MeteorBase = {
         params: EJSON.clone(params),
         inactive: false,
         ready: false,
+        wasReady: false,
+        restartAttempts: 0,
         readyDeps: new Tracker.Dependency(),
         readyCallback: callbacks.onReady,
         stopCallback: callbacks.onStop,
@@ -656,16 +680,9 @@ const Meteor: MeteorBase = {
   },
 };
 
-Data.on('onLogin', () => {
-  if (Meteor._pendingSubscriptionsRestart) {
-    Meteor._pendingSubscriptionsRestart = false;
-    Meteor._subscriptionsRestart();
-  }
-});
-
-Data.on('onLogout', () => {
-  Meteor._pendingSubscriptionsRestart = false;
-});
+// No-op handlers retained for backward compatibility
+Data.on('onLogin', () => {});
+Data.on('onLogout', () => {});
 
 const getNetInfo = (NetInfo?: any) =>
   NetInfo ? NetInfo : require('@react-native-community/netinfo').default;
