@@ -89,7 +89,7 @@ interface DDPOptions {
  * @type {number}
  * @private
  */
-const DEFAULT_RECONNECT_INTERVAL = 5000;
+const DEFAULT_RECONNECT_INTERVAL = 1500;
 
 /**
  * Internal interface for event handling.
