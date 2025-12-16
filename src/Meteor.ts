@@ -202,6 +202,14 @@ const Meteor: MeteorBase = {
     Data._endpoint = endpoint;
     Data._options = options;
 
+    if (this.isVerbose) {
+      try {
+        this.logger({ event: 'connect_init', endpoint });
+      } catch (e) {
+        // no-op
+      }
+    }
+
     const ddp = new DDP({
       endpoint: endpoint,
       SocketConstructor: WebSocket as any,

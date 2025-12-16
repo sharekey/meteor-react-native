@@ -198,6 +198,7 @@ class DDP extends EventEmitter<DDPEventMap> {
   reconnectInterval: number;
   messageQueue: Queue<any>;
   socket: Socket;
+  endpoint: string;
   private activeSubs: Map<string, { name: string; params: any }>;
   private pendingMethods: Map<string, any>;
   private _lastSessionId?: string;
@@ -227,6 +228,7 @@ class DDP extends EventEmitter<DDPEventMap> {
     this.isVerbose = options.isVerbose ?? false;
     this.activeSubs = new Map();
     this.pendingMethods = new Map();
+    this.endpoint = options.endpoint;
 
     // Default `autoConnect` and `autoReconnect` to true
     this.autoConnect = options.autoConnect !== false;
@@ -269,7 +271,11 @@ class DDP extends EventEmitter<DDPEventMap> {
     }
 
     this.socket.on('open', () => {
-      this.isVerbose && this.logger('WebSocket connection opened');
+      this.isVerbose &&
+        this.logger({
+          event: 'ddp_open',
+          endpoint: this.endpoint,
+        });
       // When the socket opens, send the `connect` message
       // to establish the DDP connection
       const connectMessage: any = {
@@ -284,11 +290,21 @@ class DDP extends EventEmitter<DDPEventMap> {
     });
 
     this.socket.on('close', () => {
-      this.isVerbose && this.logger('WebSocket connection closed');
+      this.isVerbose &&
+        this.logger({
+          event: 'ddp_close',
+          endpoint: this.endpoint,
+        });
       this.status = 'disconnected';
       this.emit('disconnected');
       if (this.autoReconnect) {
         // Schedule a reconnection
+        this.isVerbose &&
+          this.logger({
+            event: 'ddp_reconnect_scheduled',
+            endpoint: this.endpoint,
+            delayMs: this.reconnectInterval,
+          });
         setTimeout(this.socket.open.bind(this.socket), this.reconnectInterval);
       }
     });
@@ -400,6 +416,11 @@ class DDP extends EventEmitter<DDPEventMap> {
    * Initiates the underlying websocket to open the connection
    */
   connect() {
+    this.isVerbose &&
+      this.logger({
+        event: 'ddp_connect',
+        endpoint: this.endpoint,
+      });
     this.socket.open();
   }
 
