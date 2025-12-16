@@ -82,6 +82,7 @@ interface DDPOptions {
   logger?: (msg: any) => void;
   isPrivate?: boolean;
   isVerbose?: boolean;
+  deferReplayUntilLogin?: boolean;
 }
 
 /**
@@ -199,6 +200,7 @@ class DDP extends EventEmitter<DDPEventMap> {
   messageQueue: Queue<any>;
   socket: Socket;
   endpoint: string;
+  deferReplayUntilLogin: boolean;
   shouldReplayActionsOnLogin: boolean;
   private activeSubs: Map<string, { name: string; params: any }>;
   private pendingMethods: Map<string, any>;
@@ -230,6 +232,7 @@ class DDP extends EventEmitter<DDPEventMap> {
     this.activeSubs = new Map();
     this.pendingMethods = new Map();
     this.endpoint = options.endpoint;
+    this.deferReplayUntilLogin = options.deferReplayUntilLogin ?? false;
     this.shouldReplayActionsOnLogin = false;
 
     // Default `autoConnect` and `autoReconnect` to true
@@ -329,12 +332,11 @@ class DDP extends EventEmitter<DDPEventMap> {
             }`
           );
 
-        const hasPendingLogin = Array.from(this.pendingMethods.values()).some(
-          (pending) => pending?.method === 'login'
-        );
+        const waitForLoginReplay = this.deferReplayUntilLogin && !sessionReused;
 
-        // login is not needed, when session reused, so we can call it now
-        this.shouldReplayActionsOnLogin = !sessionReused || hasPendingLogin;
+        // Only defer replay when configured to wait for login on a new session.
+        // Otherwise, replay immediately so queued messages are sent.
+        this.shouldReplayActionsOnLogin = waitForLoginReplay;
         if (!this.shouldReplayActionsOnLogin) {
           this.requeueActiveMessages();
           this.messageQueue.process();

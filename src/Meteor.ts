@@ -213,6 +213,7 @@ const Meteor: MeteorBase = {
     const ddp = new DDP({
       endpoint: endpoint,
       SocketConstructor: WebSocket as any,
+      deferReplayUntilLogin: true,
       ...options,
     });
 

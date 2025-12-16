@@ -23,6 +23,7 @@ export type ConnectOptions = {
   autoReconnect?: boolean;
   reconnectInterval?: number;
   isPrivate?: boolean;
+  deferReplayUntilLogin?: boolean;
 };
 
 /**
