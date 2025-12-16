@@ -199,6 +199,7 @@ class DDP extends EventEmitter<DDPEventMap> {
   messageQueue: Queue<any>;
   socket: Socket;
   endpoint: string;
+  shouldReplayActionsOnLogin: boolean;
   private activeSubs: Map<string, { name: string; params: any }>;
   private pendingMethods: Map<string, any>;
   private _lastSessionId?: string;
@@ -229,6 +230,7 @@ class DDP extends EventEmitter<DDPEventMap> {
     this.activeSubs = new Map();
     this.pendingMethods = new Map();
     this.endpoint = options.endpoint;
+    this.shouldReplayActionsOnLogin = false;
 
     // Default `autoConnect` and `autoReconnect` to true
     this.autoConnect = options.autoConnect !== false;
@@ -327,8 +329,12 @@ class DDP extends EventEmitter<DDPEventMap> {
             }`
           );
 
-        this.requeueActiveMessages();
-        this.messageQueue.process();
+        // login will not be called, when session reused
+        this.shouldReplayActionsOnLogin = !sessionReused;
+        if (!this.shouldReplayActionsOnLogin) {
+          this.requeueActiveMessages();
+          this.messageQueue.process();
+        }
 
         this.emit('connected', { sessionReused });
       } else if (message.msg === 'ping') {
@@ -345,12 +351,22 @@ class DDP extends EventEmitter<DDPEventMap> {
           ) {
             this.logger(message);
           } else if (message.msg === 'result') {
-            this.pendingMethods.delete(message.id);
             if (this.isPrivate) {
               const { result, ...rest } = message as any;
               this.logger(rest);
             } else {
               this.logger(message);
+            }
+            const pendingMethod = this.pendingMethods.get(message.id);
+            const isLoginResult = pendingMethod?.method === 'login';
+            // should be deleted before requeueActiveMessages to avoid re-sending it
+            this.pendingMethods.delete(message.id);
+
+            if (isLoginResult && this.shouldReplayActionsOnLogin) {
+              // resume login finished (success or error) – unblock replay
+              this.shouldReplayActionsOnLogin = false;
+              this.requeueActiveMessages();
+              this.messageQueue.process();
             }
           } else if (
             message.msg === 'added' ||
@@ -369,12 +385,6 @@ class DDP extends EventEmitter<DDPEventMap> {
           } else {
             this.logger(message);
           }
-        }
-
-        if (message.msg === 'updated') {
-          message.methods.forEach((id: string) =>
-            this.pendingMethods.delete(id)
-          );
         }
 
         this.emit(message.msg as any, message as any);
@@ -506,12 +516,15 @@ class DDP extends EventEmitter<DDPEventMap> {
     }
   }
 
-  private requeueActiveMessages() {
+  private requeueActiveMessages(skipLoginMethods = false) {
     const loginReplay: any[] = [];
     const otherMethodReplay: any[] = [];
     const subReplay: any[] = [];
 
     this.pendingMethods.forEach((message) => {
+      if (skipLoginMethods && message.method === 'login') {
+        return;
+      }
       if (message.method === 'login') {
         loginReplay.push(message);
       } else {

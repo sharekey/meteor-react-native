@@ -297,6 +297,8 @@ const Meteor: MeteorBase = {
     });
 
     let lastDisconnect: Date | null = null;
+    // NetInfo reconnect should not fire before first disconnect when autoConnect is used.
+    let netInfoReconnectAllowed = options.autoConnect === false;
     Data.ddp.on('disconnected', () => {
       this.connected = false;
       this._reactiveDict.set('connected', false);
@@ -314,6 +316,8 @@ const Meteor: MeteorBase = {
         sub.ready = false;
         sub.readyDeps.changed();
       }
+
+      netInfoReconnectAllowed = true;
 
       if (!Data.ddp?.autoReconnect) return;
 
@@ -524,7 +528,11 @@ const Meteor: MeteorBase = {
         // Reconnect if we lose internet
         NetInfo.addEventListener(
           ({ type, isConnected, isInternetReachable, isWifiEnabled }: any) => {
-            if (isConnected && Data.ddp?.autoReconnect) {
+            if (
+              isConnected &&
+              Data.ddp?.autoReconnect &&
+              netInfoReconnectAllowed
+            ) {
               Data.ddp?.connect();
             }
           }
