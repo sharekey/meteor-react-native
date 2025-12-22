@@ -42,6 +42,7 @@ export interface MeteorBase {
   _pendingSubscriptionsRestart?: boolean;
   ReactiveDict: typeof ReactiveDict;
   Collection: typeof Collection;
+  loggedIn(): boolean;
   collection(): never;
   withTracker: typeof withTracker;
   useTracker: typeof useTracker;
@@ -86,6 +87,9 @@ const Meteor: MeteorBase = {
   _pendingSubscriptionsRestart: false,
   ReactiveDict,
   Collection,
+  loggedIn() {
+    return !!this._reactiveDict.get('isLoggedIn');
+  },
   collection() {
     throw new Error('Meteor.collection is deprecated. Use Mongo.Collection');
   },
@@ -201,6 +205,7 @@ const Meteor: MeteorBase = {
 
     Data._endpoint = endpoint;
     Data._options = options;
+    this._reactiveDict.set('isLoggedIn', false);
 
     if (this.isVerbose) {
       try {
@@ -256,6 +261,7 @@ const Meteor: MeteorBase = {
       }
 
       if (sessionReused) {
+        this._reactiveDict.set('isUserLoggedIn', true);
         const ddp = this.requireDdp();
         const toRestart: string[] = [];
 
@@ -282,6 +288,8 @@ const Meteor: MeteorBase = {
           sub.suppressOnStop = false;
         });
       } else {
+        this._reactiveDict.set('isLoggedIn', false);
+
         const resumePromise = loadInitialUser
           ? Promise.resolve(loadInitialUser())
           : Promise.resolve();
@@ -309,6 +317,8 @@ const Meteor: MeteorBase = {
       if (this.isVerbose) {
         this.logger('Disconnected from DDP server.');
       }
+
+      this._reactiveDict.set('isLoggedIn', false);
 
       // Fail pending method calls so they don't hang across reconnects (e.g., login)
       if (Data.calls.length) {

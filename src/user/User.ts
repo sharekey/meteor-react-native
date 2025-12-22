@@ -110,6 +110,7 @@ const User = {
     Data._options.KeyStorage.removeItem(TOKEN_EXPIRATION_KEY);
     Data._options.KeyStorage.removeItem(USER_ID_KEY);
     (Data as any)._tokenIdSaved = null;
+    Meteor._reactiveDict.set('isLoggedIn', false);
     this._reactiveDict.set('_userIdSaved', null);
     this._reactiveDict.set('_loginTokenExpires', null);
 
@@ -245,6 +246,7 @@ const User = {
       this._reactiveDict.set('_loginTokenExpires', normalizedExpiration);
       this._reactiveDict.set('_userIdSaved', result.id);
       User._userIdSaved = result.id;
+      Meteor._reactiveDict.set('isLoggedIn', true);
       User._endLoggingIn();
       this._isTokenLogin = false;
       Data.notify('onLogin');
@@ -283,6 +285,7 @@ const User = {
           Meteor.logger(
             'User._loginWithToken::: token is missing, skipping resume.'
           );
+        Meteor._reactiveDict.set('isLoggedIn', false);
         (Data as any)._tokenIdSaved = null;
         this._isTokenLogin = false;
         if (this._isCallingLogin) {
@@ -349,6 +352,7 @@ const User = {
             (loginError as any).details?.timeToReset ||
             (loginError as any).timeToReset;
           User._isTokenLogin = false;
+          Meteor._reactiveDict.set('isLoggedIn', false);
           User._endLoggingIn();
           setTimeout(() => {
             if (User._userIdSaved) return;
@@ -358,6 +362,7 @@ const User = {
           Data.notify('change');
         } else if (isResumeRejection) {
           this._isTokenLogin = false;
+          Meteor._reactiveDict.set('isLoggedIn', false);
           User.handleLogout();
           User._endLoggingIn();
           Data.notify('onLoginFailure', loginError);
@@ -365,6 +370,7 @@ const User = {
         } else if (loginError) {
           // Treat other errors (e.g. transient connection issues) as retryable
           this._isTokenLogin = true;
+          Meteor._reactiveDict.set('isLoggedIn', false);
           User._endLoggingIn();
           Data.notify('onLoginFailure', loginError);
 
