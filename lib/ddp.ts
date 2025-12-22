@@ -294,11 +294,14 @@ class DDP extends EventEmitter<DDPEventMap> {
       this.socket.send(connectMessage);
     });
 
-    this.socket.on('close', () => {
+    this.socket.on('close', (closeEvent: any) => {
       this.isVerbose &&
         this.logger({
           event: 'ddp_close',
           endpoint: this.endpoint,
+          code: closeEvent?.code,
+          reason: closeEvent?.reason,
+          wasClean: closeEvent?.wasClean,
         });
       this.status = 'disconnected';
       this.emit('disconnected');

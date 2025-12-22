@@ -4,7 +4,7 @@ import './mongo-id'; //  Register mongo object ids */
 
 type SocketEventMap = {
   open: void;
-  close: void;
+  close: { code?: number; reason?: string; wasClean?: boolean } | void;
   'message:in': any;
   'message:out': any;
   error: { isRaw?: boolean; type?: string; message?: string } | any;
@@ -94,9 +94,9 @@ export default class Socket extends EventEmitter<SocketEventMap> {
      *   `close` events on the `Socket` instance.
      */
     this.rawSocket.onopen = () => this.emit('open');
-    this.rawSocket.onclose = () => {
+    this.rawSocket.onclose = (event: any) => {
       this.rawSocket = null;
-      this.emit('close');
+      this.emit('close', event);
       // TODO check in tests if this is still true when on close callbacks
       this.closing = false;
     };
