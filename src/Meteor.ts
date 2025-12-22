@@ -310,6 +310,43 @@ const Meteor: MeteorBase = {
         this.logger('Disconnected from DDP server.');
       }
 
+      // Fail pending method calls so they don't hang across reconnects (e.g., login)
+      if (Data.calls.length) {
+        const pendingCalls = Data.calls.splice(0, Data.calls.length);
+        const connectionError = {
+          error: 'connection-lost',
+          reason: 'DDP disconnected',
+          message: 'DDP disconnected [connection-lost]',
+        };
+
+        pendingCalls.forEach(({ callback }) => {
+          if (typeof callback === 'function') {
+            try {
+              callback(connectionError);
+            } catch (e) {
+              try {
+                if (this.isVerbose && this.logger) {
+                  this.logger({
+                    event: 'method_callback_error_after_disconnect',
+                    error: e,
+                  });
+                } else {
+                  console.error('Error in method callback after disconnect', e);
+                }
+              } catch (_logErr) {
+                // no-op
+              }
+            }
+          }
+        });
+      }
+      // Also clear queued methods so they are not replayed after reconnect
+      try {
+        (Data.ddp as any)?.pendingMethods?.clear?.();
+      } catch (_err) {
+        // no-op
+      }
+
       // Mark subscriptions as ready=false
       for (var i in Data.subscriptions) {
         const sub = Data.subscriptions[i];
