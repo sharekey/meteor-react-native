@@ -345,7 +345,7 @@ const User = {
           || loginError?.error === 'not-authorized';
 
         if (Meteor.isVerbose && isResumeRejection) {
-          Meteor.logger(`User._loginWithToken::: reason ${loginError?.error}`);
+          Meteor.logger(`User._loginWithToken::: isResumeRejection reason ${loginError?.error}`);
         }
 
         if (isRateLimited) {
