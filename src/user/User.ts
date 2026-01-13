@@ -340,7 +340,13 @@ const User = {
 
         const isRateLimited = loginError?.error == 'too-many-requests';
         const isResumeRejection =
-          loginError?.error === 403 || loginError?.error === 'not-authorized';
+          loginError?.error === 403 
+          || loginError?.error === 'token-expired'
+          || loginError?.error === 'not-authorized';
+
+        if (Meteor.isVerbose && isResumeRejection) {
+          Meteor.logger(`User._loginWithToken::: reason ${(loginError === null || loginError === void 0 ? void 0 : loginError.error)}`);
+        }
 
         if (isRateLimited) {
           Meteor.isVerbose &&
