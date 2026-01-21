@@ -340,12 +340,35 @@ const User = {
 
         const isRateLimited = loginError?.error == 'too-many-requests';
         const isResumeRejection =
-          loginError?.error === 403 
-          || loginError?.error === 'token-expired'
-          || loginError?.error === 'not-authorized';
+          loginError?.error === 403 ||
+          loginError?.error === 'token-expired' ||
+          loginError?.error === 'not-authorized';
 
         if (Meteor.isVerbose && isResumeRejection) {
-          Meteor.logger(`User._loginWithToken::: isResumeRejection reason ${loginError?.error}`);
+          Meteor.logger(
+            `User._loginWithToken::: isResumeRejection reason ${loginError?.error}`
+          );
+        }
+
+        if (isResumeRejection) {
+          const status = Meteor.status();
+          const loginErrorSummary =
+            loginError && typeof loginError === 'object'
+              ? {
+                  error: loginError.error,
+                  reason: loginError.reason,
+                  message: loginError.message,
+                }
+              : loginError;
+
+          Meteor.logger('User._loginWithToken::: resume rejected', {
+            connected: status.connected,
+            status: status.status,
+            tokenPresent: !!token,
+            userIdPresent: !!User._userIdSaved,
+            isTokenLogin: this._isTokenLogin,
+            loginError: loginErrorSummary,
+          });
         }
 
         if (isRateLimited) {
@@ -419,7 +442,10 @@ const User = {
         TOKEN_EXPIRATION_KEY
       );
     } catch (error: any) {
-      console.warn('KeyStorage error: ' + error.message);
+      const message = error?.message ? error.message : String(error);
+      console.warn(
+        `KeyStorage error while reading auth keys (${TOKEN_KEY}, ${USER_ID_KEY}, ${TOKEN_EXPIRATION_KEY}): ${message}`
+      );
     }
 
     // Seed reactive values so Meteor.userId() and Meteor.loginTokenExpires() are available immediately
