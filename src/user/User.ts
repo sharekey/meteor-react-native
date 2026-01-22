@@ -7,12 +7,90 @@ import type { Collection } from '../Collection';
 
 type UserDoc<T> = { _id: string } & Record<string, any> & T;
 
+export type LoginFailurePayload = {
+  error: number | string | undefined;
+  reason: string | undefined;
+  userId: string | undefined;
+  token: string | undefined;
+  details: Record<string, unknown> | string | undefined;
+  message: string;
+  stack: string | undefined;
+  isLogoutTriggered: boolean;
+};
+
 const TOKEN_KEY = 'Meteor.loginToken';
 const TOKEN_EXPIRATION_KEY = 'Meteor.loginTokenExpires';
 const USER_ID_KEY = 'Meteor.userId';
 const Users = new (Mongo as any).Collection('users') as Collection<
   UserDoc<unknown>
 >;
+
+const DEFAULT_LOGIN_FAILURE_MESSAGE = 'unknown-login-failure';
+
+const normalizeLoginFailure = (
+  err: unknown,
+  isLogoutTriggered: boolean,
+  userId?: string | null,
+  token?: string | null
+): LoginFailurePayload => {
+  const basePayload: LoginFailurePayload = {
+    error: undefined,
+    reason: undefined,
+    userId: typeof userId === 'string' ? userId : undefined,
+    token: typeof token === 'string' ? token : undefined,
+    details: undefined,
+    message: DEFAULT_LOGIN_FAILURE_MESSAGE,
+    stack: undefined,
+    isLogoutTriggered,
+  };
+
+  if (err instanceof Error) {
+    return {
+      ...basePayload,
+      message: err.message || basePayload.message,
+      stack: err.stack,
+    };
+  }
+
+  if (err && typeof err === 'object') {
+    const error = (err as { error?: unknown }).error;
+    const reason = (err as { reason?: unknown }).reason;
+    const details = (err as { details?: unknown }).details;
+    const message = (err as { message?: unknown }).message;
+    const stack = (err as { stack?: unknown }).stack;
+
+    return {
+      ...basePayload,
+      error:
+        typeof error === 'number' || typeof error === 'string'
+          ? error
+          : undefined,
+      reason: typeof reason === 'string' ? reason : undefined,
+      details:
+        typeof details === 'string' || (details && typeof details === 'object')
+          ? (details as Record<string, unknown> | string)
+          : undefined,
+      message: typeof message === 'string' ? message : basePayload.message,
+      stack: typeof stack === 'string' ? stack : undefined,
+    };
+  }
+
+  if (typeof err === 'string') {
+    return {
+      ...basePayload,
+      message: err,
+    };
+  }
+
+  if (err !== undefined && err !== null) {
+    return {
+      ...basePayload,
+      message: String(err),
+    };
+  }
+
+  return basePayload;
+};
 
 /**
  * @namespace User
@@ -83,13 +161,13 @@ const User = {
   },
 
   logout(callback?: (err?: any) => void): void {
-    const finish = (err?: any) => {
+    const finish = async (err?: any) => {
       if (err) {
         User._endLoggingOut();
         if (typeof callback === 'function') callback(err);
         return;
       }
-      User.handleLogout();
+      await User.handleLogout();
       if (typeof callback === 'function') callback();
     };
 
@@ -105,10 +183,14 @@ const User = {
     }
   },
 
-  handleLogout(): void {
-    Data._options.KeyStorage.removeItem(TOKEN_KEY);
-    Data._options.KeyStorage.removeItem(TOKEN_EXPIRATION_KEY);
-    Data._options.KeyStorage.removeItem(USER_ID_KEY);
+  async handleLogout(): Promise<void> {
+    await Promise.all([
+      Data._options.KeyStorage.removeItem(TOKEN_KEY).catch(() => undefined),
+      Data._options.KeyStorage.removeItem(TOKEN_EXPIRATION_KEY).catch(
+        () => undefined
+      ),
+      Data._options.KeyStorage.removeItem(USER_ID_KEY).catch(() => undefined),
+    ]);
     (Data as any)._tokenIdSaved = null;
     Meteor._reactiveDict.set('isLoggedIn', false);
     this._reactiveDict.set('_userIdSaved', null);
@@ -139,8 +221,8 @@ const User = {
         user: sel,
         password: hashPassword(password),
       },
-      (err: any, result: any) => {
-        User._handleLoginCallback(err, result);
+      async (err: any, result: any) => {
+        await User._handleLoginCallback(err, result);
         if (typeof callback === 'function') callback(err);
       }
     );
@@ -167,18 +249,18 @@ const User = {
         password: hashPassword(password),
         code,
       },
-      (err: any, result: any) => {
-        User._handleLoginCallback(err, result);
+      async (err: any, result: any) => {
+        await User._handleLoginCallback(err, result);
         if (typeof callback === 'function') callback(err);
       }
     );
   },
 
   logoutOtherClients(callback: (err?: any) => void = () => {}): void {
-    Meteor.call('getNewToken', (err: any, res: any) => {
+    Meteor.call('getNewToken', async (err: any, res: any) => {
       if (err) return callback(err);
 
-      User._handleLoginCallback(err, res);
+      await User._handleLoginCallback(err, res);
 
       Meteor.call('removeOtherTokens', (err2: any) => {
         callback(err2);
@@ -188,8 +270,8 @@ const User = {
 
   _login(user: any, callback?: (err?: any) => void): void {
     User._startLoggingIn();
-    Meteor.call('login', user, (err: any, result: any) => {
-      User._handleLoginCallback(err, result);
+    Meteor.call('login', user, async (err: any, result: any) => {
+      await User._handleLoginCallback(err, result);
       if (typeof callback === 'function') callback(err);
     });
   },
@@ -214,7 +296,7 @@ const User = {
     Data.notify('loggingOut');
   },
 
-  _handleLoginCallback(err: any, result: any): void {
+  async _handleLoginCallback(err: any, result: any): Promise<void> {
     if (!err) {
       if (Meteor.isVerbose) {
         Meteor.logger(
@@ -224,20 +306,22 @@ const User = {
       const normalizedExpiration =
         User._normalizeTokenExpiration(result?.tokenExpires) ?? null;
 
-      Data._options.KeyStorage.setItem(TOKEN_KEY, result.token);
-      if (result?.id !== null) {
-        Data._options.KeyStorage.setItem(USER_ID_KEY, String(result.id));
-      } else {
-        Data._options.KeyStorage.removeItem(USER_ID_KEY);
-      }
-      if (normalizedExpiration) {
-        Data._options.KeyStorage.setItem(
-          TOKEN_EXPIRATION_KEY,
-          normalizedExpiration
-        );
-      } else {
-        Data._options.KeyStorage.removeItem(TOKEN_EXPIRATION_KEY);
-      }
+      await Promise.all([
+        Data._options.KeyStorage.setItem(TOKEN_KEY, result.token).catch(
+          () => undefined
+        ),
+        (result?.id !== null
+          ? Data._options.KeyStorage.setItem(USER_ID_KEY, String(result.id))
+          : Data._options.KeyStorage.removeItem(USER_ID_KEY)
+        ).catch(() => undefined),
+        (normalizedExpiration
+          ? Data._options.KeyStorage.setItem(
+              TOKEN_EXPIRATION_KEY,
+              normalizedExpiration
+            )
+          : Data._options.KeyStorage.removeItem(TOKEN_EXPIRATION_KEY)
+        ).catch(() => undefined),
+      ]);
       (Data as any)._tokenIdSaved = result.token;
       User._tokenExpirationSaved = normalizedExpiration;
       this._reactiveDict.set('_loginTokenExpires', normalizedExpiration);
@@ -269,7 +353,10 @@ const User = {
       }
       User._endLoggingIn();
       // we delegate the error to enable better logging
-      Data.notify('onLoginFailure', err);
+      Data.notify(
+        'onLoginFailure',
+        normalizeLoginFailure(err, false, User._userIdSaved)
+      );
     }
     Data.notify('change');
   },
@@ -319,7 +406,7 @@ const User = {
       this._isCallingLogin = true;
       User._startLoggingIn();
 
-      const respond = (err: any, result: any) => {
+      const respond = async (err: any, result: any) => {
         if (Meteor.isVerbose) {
           Meteor.logger(
             `User._loginWithToken::: respond err=${safeStringify(
@@ -329,6 +416,7 @@ const User = {
         }
         this._isCallingLogin = false;
         let loginError = err;
+        const userIdSnapshot = User._userIdSaved;
         const missingToken =
           !result ||
           typeof (result as any).token !== 'string' ||
@@ -352,7 +440,8 @@ const User = {
         const isResumeRejection =
           loginError?.error === 403 ||
           loginError?.error === 'token-expired' ||
-          loginError?.error === 'not-authorized';
+          loginError?.error === 'not-authorized' ||
+          loginError?.error === 'incorrect-auth-token';
 
         if (Meteor.isVerbose && isResumeRejection) {
           Meteor.logger(
@@ -387,6 +476,12 @@ const User = {
         }
 
         if (isRateLimited) {
+          const failurePayload = normalizeLoginFailure(
+            loginError,
+            false,
+            userIdSnapshot,
+            token
+          );
           Meteor.isVerbose &&
             Meteor.logger(
               `User._handleLoginCallback::: too many requests retrying: ${safeStringify(
@@ -403,21 +498,33 @@ const User = {
             if (User._userIdSaved) return;
             this._loadInitialUser();
           }, (time || 0) + 100);
-          Data.notify('onLoginFailure', loginError);
+          Data.notify('onLoginFailure', failurePayload);
           Data.notify('change');
         } else if (isResumeRejection) {
+          const failurePayload = normalizeLoginFailure(
+            loginError,
+            true,
+            userIdSnapshot,
+            token
+          );
           this._isTokenLogin = false;
           Meteor._reactiveDict.set('isLoggedIn', false);
-          User.handleLogout();
+          await User.handleLogout();
           User._endLoggingIn();
-          Data.notify('onLoginFailure', loginError);
+          Data.notify('onLoginFailure', failurePayload);
           Data.notify('change');
         } else if (loginError) {
+          const failurePayload = normalizeLoginFailure(
+            loginError,
+            false,
+            userIdSnapshot,
+            token
+          );
           // Treat other errors (e.g. transient connection issues) as retryable
           this._isTokenLogin = true;
           Meteor._reactiveDict.set('isLoggedIn', false);
           User._endLoggingIn();
-          Data.notify('onLoginFailure', loginError);
+          Data.notify('onLoginFailure', failurePayload);
 
           const retryToken = (Data as any)._tokenIdSaved || token;
           const delay = this._timeout;
@@ -428,7 +535,7 @@ const User = {
           }, delay);
           Data.notify('change');
         } else {
-          User._handleLoginCallback(loginError, result);
+          await User._handleLoginCallback(loginError, result);
         }
         callback?.(loginError, result);
         resolve();
