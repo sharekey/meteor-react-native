@@ -32,8 +32,35 @@ class AccountsPassword {
 
     User._startLoggingIn();
     call('createUser', options, (err: any, result: any) => {
-      Meteor.isVerbose &&
-        Meteor.logger('Accounts.createUser::: err:', err, 'result:', result);
+      if (Meteor.isVerbose) {
+        let errText: string;
+        if (err instanceof Error) {
+          errText = err.stack || err.message || String(err);
+        } else if (typeof err === 'string') {
+          errText = err;
+        } else {
+          try {
+            errText = JSON.stringify(err);
+          } catch (_stringifyError) {
+            errText = String(err);
+          }
+        }
+
+        let resultText: string;
+        if (typeof result === 'string') {
+          resultText = result;
+        } else {
+          try {
+            resultText = JSON.stringify(result);
+          } catch (_stringifyError) {
+            resultText = String(result);
+          }
+        }
+
+        Meteor.logger(
+          `Accounts.createUser::: err: ${errText} result: ${resultText}`
+        );
+      }
 
       User._endLoggingIn();
       User._handleLoginCallback(err, result);
@@ -100,13 +127,35 @@ class AccountsPassword {
       token,
       hashPassword(newPassword),
       (err: any, result: any) => {
-        Meteor.isVerbose &&
+        if (Meteor.isVerbose) {
+          let errText: string;
+          if (err instanceof Error) {
+            errText = err.stack || err.message || String(err);
+          } else if (typeof err === 'string') {
+            errText = err;
+          } else {
+            try {
+              errText = JSON.stringify(err);
+            } catch (_stringifyError) {
+              errText = String(err);
+            }
+          }
+
+          let resultText: string;
+          if (typeof result === 'string') {
+            resultText = result;
+          } else {
+            try {
+              resultText = JSON.stringify(result);
+            } catch (_stringifyError) {
+              resultText = String(result);
+            }
+          }
+
           Meteor.logger(
-            'Accounts.resetPassword::: err:',
-            err,
-            'result:',
-            result
+            `Accounts.resetPassword::: err: ${errText} result: ${resultText}`
           );
+        }
         if (!err) {
           User._loginWithToken(result.token);
         }

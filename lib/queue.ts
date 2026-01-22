@@ -1,5 +1,7 @@
+type LoggerPayload = object | string;
+
 interface QueueOptions {
-  logger?: (msg: any) => void;
+  logger?: (msg: LoggerPayload) => void;
   isVerbose?: boolean;
 }
 
@@ -8,7 +10,7 @@ interface QueueOptions {
  */
 export default class Queue<T extends object = any> {
   private queue: T[] = [];
-  private logger: ((entry: any) => void) | undefined;
+  private logger: ((entry: LoggerPayload) => void) | undefined;
   private isVerbose: boolean;
   private ids: WeakMap<T, string> = new WeakMap();
   private counter = 1;

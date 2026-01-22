@@ -12,13 +12,15 @@ export type KeyStorage = {
   removeItem(key: string): Promise<void> | void;
 };
 
+export type LoggerPayload = object | string;
+
 export type ConnectOptions = {
   KeyStorage: KeyStorage;
   suppressUrlErrors?: boolean;
   reachabilityUrl?: string;
   NetInfo?: any;
   isVerbose?: boolean;
-  logger?: (msg: any) => void;
+  logger?: (msg: LoggerPayload) => void;
   autoConnect?: boolean;
   autoReconnect?: boolean;
   reconnectInterval?: number;

@@ -3,7 +3,7 @@ import EJSON from 'ejson';
 import DDP from '../lib/ddp';
 import Random from '../lib/Random';
 
-import Data from './Data';
+import Data, { type LoggerPayload } from './Data';
 import Mongo from './Mongo';
 import { Collection, getObservers, localCollections } from './Collection';
 import call from './Call';
@@ -33,7 +33,7 @@ function toMeteorStyleError(
 
 export interface MeteorBase {
   isVerbose: boolean;
-  logger: (msg?: any, ...args: any[]) => void;
+  logger: (msg: LoggerPayload) => void;
   _reactiveDict: ReactiveDict;
   Random: typeof Random;
   Mongo: typeof Mongo;
@@ -74,7 +74,7 @@ type Status = 'disconnected' | 'connected' | string;
 const Meteor: MeteorBase = {
   isVerbose: false,
   // Default logger; can be overridden via options.logger in connect
-  logger: console.info,
+  logger: (msg: LoggerPayload) => console.info(msg),
 
   /**
    * Calling this enables extended internal logging to console

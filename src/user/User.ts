@@ -218,10 +218,7 @@ const User = {
     if (!err) {
       if (Meteor.isVerbose) {
         Meteor.logger(
-          'User._handleLoginCallback::: token:',
-          result?.token,
-          'id:',
-          result?.id
+          `User._handleLoginCallback::: token: ${result?.token} id: ${result?.id}`
         );
       }
       const normalizedExpiration =
@@ -251,8 +248,21 @@ const User = {
       this._isTokenLogin = false;
       Data.notify('onLogin');
     } else {
-      Meteor.isVerbose &&
-        Meteor.logger('User._handleLoginCallback::: error:', err);
+      if (Meteor.isVerbose) {
+        let errorText: string;
+        if (err instanceof Error) {
+          errorText = err.stack || err.message || String(err);
+        } else if (typeof err === 'string') {
+          errorText = err;
+        } else {
+          try {
+            errorText = JSON.stringify(err);
+          } catch (_stringifyError) {
+            errorText = String(err);
+          }
+        }
+        Meteor.logger(`User._handleLoginCallback::: error: ${errorText}`);
+      }
       // Signify we aren't logging in any more after a few seconds
       if (this._timeout > 2000) {
         User._endLoggingIn();
@@ -304,7 +314,7 @@ const User = {
       (Data as any)._tokenIdSaved = token;
       this._isTokenLogin = true;
       Meteor.isVerbose &&
-        Meteor.logger('User._loginWithToken::: token:', token);
+        Meteor.logger(`User._loginWithToken::: token: ${token}`);
 
       this._isCallingLogin = true;
       User._startLoggingIn();
@@ -361,21 +371,27 @@ const User = {
                 }
               : loginError;
 
-          Meteor.logger('User._loginWithToken::: resume rejected', {
+          const resumeSummary = {
             connected: status.connected,
             status: status.status,
             tokenPresent: !!token,
             userIdPresent: !!User._userIdSaved,
             isTokenLogin: this._isTokenLogin,
             loginError: loginErrorSummary,
-          });
+          };
+          Meteor.logger(
+            `User._loginWithToken::: resume rejected ${safeStringify(
+              resumeSummary
+            )}`
+          );
         }
 
         if (isRateLimited) {
           Meteor.isVerbose &&
             Meteor.logger(
-              'User._handleLoginCallback::: too many requests retrying:',
-              loginError
+              `User._handleLoginCallback::: too many requests retrying: ${safeStringify(
+                loginError
+              )}`
             );
           const time =
             (loginError as any).details?.timeToReset ||

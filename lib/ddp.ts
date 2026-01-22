@@ -33,6 +33,7 @@ const PUBLIC_EVENTS: (keyof DDPEventMap)[] = [
 ];
 
 type DDPStatus = 'connected' | 'disconnected';
+type LoggerPayload = object | string;
 
 type DDPConnectedMessage = { msg: 'connected'; session: string };
 type DDPPingMessage = { msg: 'ping'; id?: string };
@@ -79,7 +80,7 @@ interface DDPOptions {
   autoConnect?: boolean;
   autoReconnect?: boolean;
   reconnectInterval?: number;
-  logger?: (msg: any) => void;
+  logger?: (msg: LoggerPayload) => void;
   isPrivate?: boolean;
   isVerbose?: boolean;
   deferReplayUntilLogin?: boolean;
@@ -191,7 +192,7 @@ type DDPEventMap = {
 class DDP extends EventEmitter<DDPEventMap> {
   eventInterface: EventInterface;
   status: DDPStatus;
-  logger: (msg: any) => void;
+  logger: (msg: LoggerPayload) => void;
   isPrivate: boolean;
   isVerbose: boolean;
   autoConnect: boolean;
@@ -226,7 +227,7 @@ class DDP extends EventEmitter<DDPEventMap> {
 
     this.eventInterface = eventInterface.activate(this);
     this.status = 'disconnected';
-    this.logger = options.logger ?? console.info;
+    this.logger = options.logger ?? ((msg: LoggerPayload) => console.info(msg));
     this.isPrivate = options.isPrivate ?? true;
     this.isVerbose = options.isVerbose ?? false;
     this.activeSubs = new Map();
