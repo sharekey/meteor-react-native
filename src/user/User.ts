@@ -336,7 +336,7 @@ const User = {
 
         if (!loginError && missingToken) {
           loginError = {
-            error: 'not-authorized',
+            error: 'missing-token',
             reason: 'Login response missing token',
             details: { result },
           };
