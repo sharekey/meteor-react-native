@@ -1,6 +1,6 @@
 import Data from '../Data';
 import call from '../Call';
-import User from './User';
+import User, { type LoginFailurePayload } from './User';
 import { hashPassword } from '../../lib/utils';
 import Meteor from '../Meteor';
 
@@ -31,7 +31,7 @@ class AccountsPassword {
     options.password = hashPassword(options.password) as any;
 
     User._startLoggingIn();
-    call('createUser', options, (err: any, result: any) => {
+    call('createUser', options, async (err: any, result: any) => {
       if (Meteor.isVerbose) {
         let errText: string;
         if (err instanceof Error) {
@@ -63,7 +63,7 @@ class AccountsPassword {
       }
 
       User._endLoggingIn();
-      User._handleLoginCallback(err, result);
+      await User._handleLoginCallback(err, result);
       callback(err);
     });
   };
@@ -180,7 +180,7 @@ class AccountsPassword {
   /**
    * Register a callback to be called after a login attempt fails.
    */
-  onLoginFailure = (cb: (...args: any[]) => void) => {
+  onLoginFailure = (cb: (payload: LoginFailurePayload) => void) => {
     Data.on('onLoginFailure', cb);
   };
 
