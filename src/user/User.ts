@@ -103,7 +103,34 @@ const isResumeRejectionError = (value: unknown): boolean => {
     return false;
   }
 
-  return RESUME_REJECTION_ERRORS.includes(value);
+  return RESUME_REJECTION_ERRORS.includes(
+    value as typeof RESUME_REJECTION_ERRORS[number]
+  );
+};
+
+const formatKeyStorageError = (error: unknown): string => {
+  if (error instanceof Error) {
+    return error.stack || error.message || String(error);
+  }
+  if (typeof error === 'string') return error;
+  try {
+    return JSON.stringify(error);
+  } catch (_stringifyError) {
+    return String(error);
+  }
+};
+
+const logKeyStorageError = (
+  operation: 'setItem' | 'removeItem',
+  key: string,
+  error: unknown
+): void => {
+  Meteor.logger({
+    event: 'key_storage_error',
+    key,
+    error: formatKeyStorageError(error),
+    operation,
+  });
 };
 
 /**
@@ -199,11 +226,17 @@ const User = {
 
   async handleLogout(): Promise<void> {
     await Promise.all([
-      Data._options.KeyStorage.removeItem(TOKEN_KEY).catch(() => undefined),
+      Data._options.KeyStorage.removeItem(TOKEN_KEY).catch((error) => {
+        logKeyStorageError('removeItem', TOKEN_KEY, error);
+      }),
       Data._options.KeyStorage.removeItem(TOKEN_EXPIRATION_KEY).catch(
-        () => undefined
+        (error) => {
+          logKeyStorageError('removeItem', TOKEN_EXPIRATION_KEY, error);
+        }
       ),
-      Data._options.KeyStorage.removeItem(USER_ID_KEY).catch(() => undefined),
+      Data._options.KeyStorage.removeItem(USER_ID_KEY).catch((error) => {
+        logKeyStorageError('removeItem', USER_ID_KEY, error);
+      }),
     ]);
     (Data as any)._tokenIdSaved = null;
     Meteor._reactiveDict.set('isLoggedIn', false);
@@ -320,21 +353,39 @@ const User = {
       const normalizedExpiration =
         User._normalizeTokenExpiration(result?.tokenExpires) ?? null;
 
+      const userIdStoragePromise =
+        result?.id !== null
+          ? Data._options.KeyStorage.setItem(
+              USER_ID_KEY,
+              String(result.id)
+            ).catch((error) => {
+              logKeyStorageError('setItem', USER_ID_KEY, error);
+            })
+          : Data._options.KeyStorage.removeItem(USER_ID_KEY).catch((error) => {
+              logKeyStorageError('removeItem', USER_ID_KEY, error);
+            });
+
+      const expirationStoragePromise = normalizedExpiration
+        ? Data._options.KeyStorage.setItem(
+            TOKEN_EXPIRATION_KEY,
+            normalizedExpiration
+          ).catch((error) => {
+            logKeyStorageError('setItem', TOKEN_EXPIRATION_KEY, error);
+          })
+        : Data._options.KeyStorage.removeItem(TOKEN_EXPIRATION_KEY).catch(
+            (error) => {
+              logKeyStorageError('removeItem', TOKEN_EXPIRATION_KEY, error);
+            }
+          );
+
       await Promise.all([
         Data._options.KeyStorage.setItem(TOKEN_KEY, result.token).catch(
-          () => undefined
+          (error) => {
+            logKeyStorageError('setItem', TOKEN_KEY, error);
+          }
         ),
-        (result?.id !== null
-          ? Data._options.KeyStorage.setItem(USER_ID_KEY, String(result.id))
-          : Data._options.KeyStorage.removeItem(USER_ID_KEY)
-        ).catch(() => undefined),
-        (normalizedExpiration
-          ? Data._options.KeyStorage.setItem(
-              TOKEN_EXPIRATION_KEY,
-              normalizedExpiration
-            )
-          : Data._options.KeyStorage.removeItem(TOKEN_EXPIRATION_KEY)
-        ).catch(() => undefined),
+        userIdStoragePromise,
+        expirationStoragePromise,
       ]);
       (Data as any)._tokenIdSaved = result.token;
       User._tokenExpirationSaved = normalizedExpiration;
