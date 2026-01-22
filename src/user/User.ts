@@ -21,6 +21,12 @@ export type LoginFailurePayload = {
 const TOKEN_KEY = 'Meteor.loginToken';
 const TOKEN_EXPIRATION_KEY = 'Meteor.loginTokenExpires';
 const USER_ID_KEY = 'Meteor.userId';
+const RESUME_REJECTION_ERRORS = [
+  403,
+  'token-expired',
+  'not-authorized',
+  'incorrect-auth-token',
+] as const;
 const Users = new (Mongo as any).Collection('users') as Collection<
   UserDoc<unknown>
 >;
@@ -90,6 +96,14 @@ const normalizeLoginFailure = (
   }
 
   return basePayload;
+};
+
+const isResumeRejectionError = (value: unknown): boolean => {
+  if (typeof value !== 'string' && typeof value !== 'number') {
+    return false;
+  }
+
+  return RESUME_REJECTION_ERRORS.includes(value);
 };
 
 /**
@@ -437,11 +451,7 @@ const User = {
         }
 
         const isRateLimited = loginError?.error == 'too-many-requests';
-        const isResumeRejection =
-          loginError?.error === 403 ||
-          loginError?.error === 'token-expired' ||
-          loginError?.error === 'not-authorized' ||
-          loginError?.error === 'incorrect-auth-token';
+        const isResumeRejection = isResumeRejectionError(loginError?.error);
 
         if (Meteor.isVerbose && isResumeRejection) {
           Meteor.logger(
