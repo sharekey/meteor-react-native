@@ -401,7 +401,17 @@ const Meteor: MeteorBase = {
 
     Data.ddp.on('error', (message) => {
       if (this.isVerbose) {
-        console.error('DDP error', message);
+        let payload = message;
+
+        if (typeof message !== 'string') {
+          try {
+            payload = JSON.stringify(message);
+          } catch (_error) {
+            payload = String(message);
+          }
+        }
+
+        console.error('DDP error', payload);
       }
     });
 
