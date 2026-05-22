@@ -213,6 +213,19 @@ The following shows several events that allow for detailed logging and inspectio
 > The logging can be useful for analysis and instrumentation of production apps
 > where no console access is possible
 
+#### Runtime verbose logging
+
+The `logger`, `isVerbose`, and `isPrivate` options passed to `Meteor.connect`
+can also be updated after connecting:
+
+```js
+Meteor.setLoggingOptions({
+  isVerbose: true,
+  isPrivate: false,
+  logger: (message) => console.debug(message),
+});
+```
+
 #### Data level events (high level)
 
 The most convenient way to track internals is via `Data.onChange`:

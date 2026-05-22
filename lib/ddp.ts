@@ -86,6 +86,8 @@ interface DDPOptions {
   deferReplayUntilLogin?: boolean;
 }
 
+type DDPLoggingOptions = Pick<DDPOptions, 'logger' | 'isPrivate' | 'isVerbose'>;
+
 /**
  * The default timout in ms until a reconnection attempt starts
  * @type {number}
@@ -260,21 +262,20 @@ class DDP extends EventEmitter<DDPEventMap> {
 
     this.socket = new Socket(options.SocketConstructor, options.endpoint);
 
-    if (this.isVerbose) {
-      this.socket.on('message:out', (outMessage) => {
-        try {
-          const { params, ...rest } = outMessage as any;
-          const base = { SEND: 'SEND', ...rest };
-          this.logger(
-            this.isPrivate && params !== undefined
-              ? base
-              : { SEND: 'SEND', ...outMessage }
-          );
-        } catch (e) {
-          // no-op
-        }
-      });
-    }
+    this.socket.on('message:out', (outMessage) => {
+      if (!this.isVerbose) return;
+      try {
+        const { params, ...rest } = outMessage as any;
+        const base = { SEND: 'SEND', ...rest };
+        this.logger(
+          this.isPrivate && params !== undefined
+            ? base
+            : { SEND: 'SEND', ...outMessage }
+        );
+      } catch (e) {
+        // no-op
+      }
+    });
 
     this.socket.on('open', () => {
       this.isVerbose &&
@@ -453,6 +454,23 @@ class DDP extends EventEmitter<DDPEventMap> {
   disconnect() {
     this.autoReconnect = false;
     this.socket.close();
+  }
+
+  setLoggingOptions(options: DDPLoggingOptions): void {
+    if (options.logger !== undefined) {
+      this.logger = options.logger;
+    }
+    if (options.isPrivate !== undefined) {
+      this.isPrivate = options.isPrivate;
+    }
+    if (options.isVerbose !== undefined) {
+      this.isVerbose = options.isVerbose;
+    }
+
+    this.messageQueue.setLoggingOptions({
+      logger: this.logger,
+      isVerbose: this.isVerbose,
+    });
   }
 
   /**

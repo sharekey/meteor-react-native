@@ -3,7 +3,7 @@ import EJSON from 'ejson';
 import DDP from '../lib/ddp';
 import Random from '../lib/Random';
 
-import Data, { type LoggerPayload } from './Data';
+import Data, { type ConnectOptions, type LoggerPayload } from './Data';
 import Mongo from './Mongo';
 import { Collection, getObservers, localCollections } from './Collection';
 import call from './Call';
@@ -19,6 +19,11 @@ type DdpErrorPayload = {
   reason?: string;
   details?: any;
 };
+
+export type MeteorLoggingOptions = Pick<
+  ConnectOptions,
+  'isVerbose' | 'isPrivate' | 'logger'
+>;
 
 function toMeteorStyleError(
   payload?: DdpErrorPayload | null
@@ -55,6 +60,7 @@ export interface MeteorBase {
   waitDdpConnected: (cb: (...args: any[]) => void) => void;
   reconnect(): void;
   connect(endpoint?: string, options?: any): void;
+  setLoggingOptions(options: MeteorLoggingOptions): void;
   requireDdp(): DDP;
   subscribe(
     name: string,
@@ -165,6 +171,22 @@ const Meteor: MeteorBase = {
   waitDdpConnected: Data.waitDdpConnected.bind(Data),
   reconnect() {
     Data.ddp && Data.ddp.connect();
+  },
+  setLoggingOptions(options: MeteorLoggingOptions) {
+    if (options.isVerbose !== undefined) {
+      this.isVerbose = options.isVerbose;
+    }
+    if (options.logger !== undefined) {
+      this.logger = options.logger;
+    }
+
+    Data._options = {
+      ...Data._options,
+      ...Object.fromEntries(
+        Object.entries(options).filter(([, value]) => value !== undefined)
+      ),
+    };
+    Data.ddp?.setLoggingOptions(options);
   },
   /**
    * Connect to a Meteor server using a given websocket endpoint.
