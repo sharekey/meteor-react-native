@@ -292,4 +292,47 @@ describe('ddp', function () {
       });
     });
   });
+  describe('logging', function () {
+    it('updates logging options at runtime', function (done) {
+      const logs = [];
+      validOptions.autoConnect = false;
+      validOptions.autoReconnect = false;
+      validOptions.isVerbose = false;
+      validOptions.isPrivate = true;
+      validOptions.logger = (message) => logs.push(message);
+
+      ddp = new DDP(validOptions);
+      ddp.setLoggingOptions({
+        isVerbose: true,
+        isPrivate: false,
+      });
+
+      listen(ddp.socket, 'open', () => {
+        try {
+          ddp.socket.emit('message:in', {
+            msg: 'connected',
+            session: 'session',
+          });
+          ddp.method('foo', { foo: 'bar' });
+
+          const sentMethod = logs.find(
+            (message) => message.SEND === 'SEND' && message.msg === 'method'
+          );
+          const queuedMethod = logs.find(
+            (message) => message.QUEUE === 'ENQUEUE' && message.msg === 'method'
+          );
+
+          expect(sentMethod).to.exist;
+          expect(queuedMethod).to.exist;
+          expect(sentMethod.params).to.deep.equal({ foo: 'bar' });
+          expect(queuedMethod.params).to.equal(undefined);
+          done();
+        } catch (error) {
+          done(error);
+        }
+      });
+
+      ddp.connect();
+    });
+  });
 });

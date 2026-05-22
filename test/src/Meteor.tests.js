@@ -92,4 +92,46 @@ describe('Meteor - integration', function () {
       });
     });
   });
+
+  describe(Meteor.setLoggingOptions.name, () => {
+    it('updates Meteor and current DDP logging options', () => {
+      const data = Meteor.getData();
+      const previousDdp = data.ddp;
+      const previousOptions = data._options;
+      const previousIsVerbose = Meteor.isVerbose;
+      const previousLogger = Meteor.logger;
+      const logger = () => {};
+      const calls = [];
+
+      data.ddp = {
+        setLoggingOptions: (options) => calls.push(options),
+      };
+
+      try {
+        Meteor.setLoggingOptions({
+          isVerbose: true,
+          isPrivate: false,
+          logger,
+        });
+
+        expect(Meteor.isVerbose).to.equal(true);
+        expect(Meteor.logger).to.equal(logger);
+        expect(data._options.isVerbose).to.equal(true);
+        expect(data._options.isPrivate).to.equal(false);
+        expect(data._options.logger).to.equal(logger);
+        expect(calls).to.deep.equal([
+          {
+            isVerbose: true,
+            isPrivate: false,
+            logger,
+          },
+        ]);
+      } finally {
+        data.ddp = previousDdp;
+        data._options = previousOptions;
+        Meteor.isVerbose = previousIsVerbose;
+        Meteor.logger = previousLogger;
+      }
+    });
+  });
 });

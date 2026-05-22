@@ -36,6 +36,15 @@ export default class Queue<T extends object = any> {
     this.isVerbose = options.isVerbose ?? false;
   }
 
+  setLoggingOptions(options: QueueOptions): void {
+    if (options.logger !== undefined) {
+      this.logger = options.logger;
+    }
+    if (options.isVerbose !== undefined) {
+      this.isVerbose = options.isVerbose;
+    }
+  }
+
   /**
    * Adds a new element to the queue
    * @param element {any} likely an object

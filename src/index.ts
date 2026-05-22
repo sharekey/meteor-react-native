@@ -12,5 +12,6 @@ const { useTracker, withTracker, Mongo, ReactiveDict } = MeteorAugmented;
 
 export { useTracker, Accounts, withTracker, Mongo, ReactiveDict, Tracker };
 export { Vent } from './vent';
+export type { MeteorLoggingOptions } from './Meteor';
 export type { LoginFailurePayload } from './user/User';
 export default MeteorAugmented;
