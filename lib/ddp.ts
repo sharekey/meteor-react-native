@@ -354,6 +354,20 @@ class DDP extends EventEmitter<DDPEventMap> {
         // closing the connection
         this.socket.send({ msg: 'pong', id: (message as any).id });
       } else if (PUBLIC_EVENTS.includes(message.msg as any)) {
+        if (message.msg === 'result') {
+            const pendingMethod = this.pendingMethods.get(message.id);
+            const isLoginResult = pendingMethod?.method === 'login';
+            // should be deleted before requeueActiveMessages to avoid re-sending it
+            this.pendingMethods.delete(message.id);
+
+            if (isLoginResult && this.shouldReplayActionsOnLogin) {
+              // resume login finished (success or error) – unblock replay
+              this.shouldReplayActionsOnLogin = false;
+              this.requeueActiveMessages();
+              this.messageQueue.process();
+            }
+        }
+
         if (this.isVerbose) {
           if (
             message.msg === 'ready' ||
@@ -367,17 +381,6 @@ class DDP extends EventEmitter<DDPEventMap> {
               this.logger(rest);
             } else {
               this.logger(message);
-            }
-            const pendingMethod = this.pendingMethods.get(message.id);
-            const isLoginResult = pendingMethod?.method === 'login';
-            // should be deleted before requeueActiveMessages to avoid re-sending it
-            this.pendingMethods.delete(message.id);
-
-            if (isLoginResult && this.shouldReplayActionsOnLogin) {
-              // resume login finished (success or error) – unblock replay
-              this.shouldReplayActionsOnLogin = false;
-              this.requeueActiveMessages();
-              this.messageQueue.process();
             }
           } else if (
             message.msg === 'added' ||
