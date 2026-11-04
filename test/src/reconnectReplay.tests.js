@@ -17,7 +17,7 @@ const waitUntil = async (predicate, description, timeoutMs = 700) => {
 describe('Meteor - replay after reconnecting on a new session', function () {
   let received;
   let sessionCount;
-  let isLoginAnswerHeld;
+  let answerDelays;
 
   const connect = (storedToken) => {
     Meteor.connect(endpoint, {
@@ -55,7 +55,7 @@ describe('Meteor - replay after reconnecting on a new session', function () {
   beforeEach(function () {
     received = [];
     sessionCount = 0;
-    isLoginAnswerHeld = false;
+    answerDelays = new Map();
 
     server().message((data, _server, socket) => {
       const message = JSON.parse(data);
@@ -83,8 +83,9 @@ describe('Meteor - replay after reconnecting on a new session', function () {
             })
           );
 
-        if (isLogin && isLoginAnswerHeld) {
-          setTimeout(answer, 30);
+        const delay = answerDelays.get(message.method);
+        if (delay) {
+          setTimeout(answer, delay);
         } else {
           answer();
         }
@@ -163,7 +164,7 @@ describe('Meteor - replay after reconnecting on a new session', function () {
       'first sub'
     );
     received.length = 0;
-    isLoginAnswerHeld = true;
+    answerDelays.set('login', 30);
 
     ddp.socket.rawSocket.close();
     await waitUntil(
@@ -180,5 +181,38 @@ describe('Meteor - replay after reconnecting on a new session', function () {
       'the subscription after the login result'
     );
     expect(received.map(({ msg }) => msg)).to.deep.equal(['method', 'sub']);
+  });
+
+  // Called from the `connected` event: after the socket opens, before the token is read.
+  const callOnConnected = (ddp, method) =>
+    new Promise((resolve) => {
+      ddp.once('connected', () => Meteor.call(method, {}, resolve));
+    });
+
+  const timesSent = (method) =>
+    methodNames().filter((name) => name === method).length;
+
+  it('does not send a method twice when it goes out before the token is read', async function () {
+    const method = 'auth.sendEmailCode';
+    answerDelays.set(method, 30);
+
+    const ddp = connect(null);
+    await callOnConnected(ddp, method);
+
+    expect(ddp.shouldReplayActionsOnLogin).to.equal(false);
+    expect(timesSent(method)).to.equal(1);
+  });
+
+  it('does not send a method twice when it goes out before the login result', async function () {
+    const method = 'auth.sendEmailCode';
+    answerDelays.set('login', 30);
+    answerDelays.set(method, 60);
+
+    const ddp = connect('stored-token');
+    await callOnConnected(ddp, method);
+
+    expect(ddp.shouldReplayActionsOnLogin).to.equal(false);
+    expect(timesSent(method)).to.equal(1);
+    expect(methodNames()).to.include('login');
   });
 });

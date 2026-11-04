@@ -207,6 +207,8 @@ class DDP extends EventEmitter<DDPEventMap> {
   shouldReplayActionsOnLogin: boolean;
   private activeSubs: Map<string, { name: string; params: any }>;
   private pendingMethods: Map<string, any>;
+  // Sent on this socket session: replaying these would make the server run them twice.
+  private sentOnCurrentSession: Set<string>;
   private _lastSessionId?: string;
   /**
    * Create a new DDP instance and runs the following init procedure:
@@ -234,6 +236,7 @@ class DDP extends EventEmitter<DDPEventMap> {
     this.isVerbose = options.isVerbose ?? false;
     this.activeSubs = new Map();
     this.pendingMethods = new Map();
+    this.sentOnCurrentSession = new Set();
     this.endpoint = options.endpoint;
     this.deferReplayUntilLogin = options.deferReplayUntilLogin ?? false;
     this.shouldReplayActionsOnLogin = false;
@@ -325,6 +328,7 @@ class DDP extends EventEmitter<DDPEventMap> {
         this.isVerbose && this.logger(message);
         const previousSessionId = this._lastSessionId;
         this.status = 'connected';
+        this.sentOnCurrentSession.clear();
         this._lastSessionId = message.session;
         const sessionReused =
           !!previousSessionId && previousSessionId === message.session;
@@ -359,6 +363,7 @@ class DDP extends EventEmitter<DDPEventMap> {
           const isLoginResult = pendingMethod?.method === 'login';
           // should be deleted before requeueActiveMessages to avoid re-sending it
           this.pendingMethods.delete(message.id);
+          this.sentOnCurrentSession.delete(message.id);
 
           if (isLoginResult) {
             // resume login finished (success or error) – unblock replay
@@ -535,13 +540,16 @@ class DDP extends EventEmitter<DDPEventMap> {
   private trackSentMessage(message: any) {
     if (message.msg === 'method') {
       this.pendingMethods.set(message.id, message);
+      this.sentOnCurrentSession.add(message.id);
     } else if (message.msg === 'sub') {
       this.activeSubs.set(message.id, {
         name: message.name,
         params: message.params,
       });
+      this.sentOnCurrentSession.add(message.id);
     } else if (message.msg === 'unsub') {
       this.activeSubs.delete(message.id);
+      this.sentOnCurrentSession.delete(message.id);
     }
   }
 
@@ -564,6 +572,9 @@ class DDP extends EventEmitter<DDPEventMap> {
     const subReplay: any[] = [];
 
     this.pendingMethods.forEach((message) => {
+      if (this.sentOnCurrentSession.has(message.id)) {
+        return;
+      }
       if (skipLoginMethods && message.method === 'login') {
         return;
       }
@@ -575,6 +586,9 @@ class DDP extends EventEmitter<DDPEventMap> {
     });
 
     this.activeSubs.forEach((sub, id) => {
+      if (this.sentOnCurrentSession.has(id)) {
+        return;
+      }
       subReplay.push({
         msg: 'sub',
         id,
