@@ -355,17 +355,15 @@ class DDP extends EventEmitter<DDPEventMap> {
         this.socket.send({ msg: 'pong', id: (message as any).id });
       } else if (PUBLIC_EVENTS.includes(message.msg as any)) {
         if (message.msg === 'result') {
-            const pendingMethod = this.pendingMethods.get(message.id);
-            const isLoginResult = pendingMethod?.method === 'login';
-            // should be deleted before requeueActiveMessages to avoid re-sending it
-            this.pendingMethods.delete(message.id);
+          const pendingMethod = this.pendingMethods.get(message.id);
+          const isLoginResult = pendingMethod?.method === 'login';
+          // should be deleted before requeueActiveMessages to avoid re-sending it
+          this.pendingMethods.delete(message.id);
 
-            if (isLoginResult && this.shouldReplayActionsOnLogin) {
-              // resume login finished (success or error) – unblock replay
-              this.shouldReplayActionsOnLogin = false;
-              this.requeueActiveMessages();
-              this.messageQueue.process();
-            }
+          if (isLoginResult) {
+            // resume login finished (success or error) – unblock replay
+            this.releaseDeferredReplay();
+          }
         }
 
         if (this.isVerbose) {
@@ -545,6 +543,19 @@ class DDP extends EventEmitter<DDPEventMap> {
     } else if (message.msg === 'unsub') {
       this.activeSubs.delete(message.id);
     }
+  }
+
+  /**
+   * Sends what `deferReplayUntilLogin` held back on a new session. A `login`
+   * result normally ends the hold, so whoever decides not to send `login` must
+   * call this, or queued messages wait until something else is pushed.
+   */
+  releaseDeferredReplay() {
+    if (!this.shouldReplayActionsOnLogin || this.status !== 'connected') return;
+
+    this.shouldReplayActionsOnLogin = false;
+    this.requeueActiveMessages();
+    this.messageQueue.process();
   }
 
   private requeueActiveMessages(skipLoginMethods = false) {

@@ -454,6 +454,8 @@ const User = {
           this._isCallingLogin = false;
         }
         User._endLoggingIn();
+        // No `login` will be sent on this session, so its result won't end the hold.
+        Data.ddp?.releaseDeferredReplay();
         resolve();
         return;
       }
