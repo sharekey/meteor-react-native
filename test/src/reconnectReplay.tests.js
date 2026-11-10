@@ -18,6 +18,7 @@ describe('Meteor - replay after reconnecting on a new session', function () {
   let received;
   let sessionCount;
   let answerDelays;
+  let rejectedSubs;
 
   const connect = (storedToken) => {
     Meteor.connect(endpoint, {
@@ -56,6 +57,7 @@ describe('Meteor - replay after reconnecting on a new session', function () {
     received = [];
     sessionCount = 0;
     answerDelays = new Map();
+    rejectedSubs = new Set();
 
     server().message((data, _server, socket) => {
       const message = JSON.parse(data);
@@ -69,6 +71,24 @@ describe('Meteor - replay after reconnecting on a new session', function () {
       }
 
       received.push(message);
+
+      if (message.msg === 'sub' && rejectedSubs.has(message.name)) {
+        // The server's DDPRateLimiter rejection of a subscription.
+        socket.send(
+          JSON.stringify({
+            msg: 'nosub',
+            id: message.id,
+            error: {
+              isClientSafe: true,
+              error: 'too-many-requests',
+              reason: 'Error, too many requests. Please slow down.',
+              details: { timeToReset: 400 },
+              errorType: 'Meteor.Error',
+            },
+          })
+        );
+        return;
+      }
 
       if (message.msg === 'method') {
         const isLogin = message.method === 'login';
@@ -145,6 +165,50 @@ describe('Meteor - replay after reconnecting on a new session', function () {
         ),
       'the subscription on the new session'
     );
+  });
+
+  // M-3486: a nosub with an error ended the subscription for the app, but the client kept it among its active
+  // subscriptions and sent it again after every reconnect, where nothing could stop it.
+  it('does not restore a subscription the server rejected', async function () {
+    rejectedSubs.add('people.currentUserContacts');
+    const ddp = connect(null);
+    await waitUntil(
+      () => sessionCount === 1 && ddp.status === 'connected',
+      'first session'
+    );
+
+    let rejection;
+    Meteor.subscribe('people.currentUserContacts', {
+      onError: (error) => {
+        rejection = error;
+      },
+    });
+    Meteor.subscribe('backendVersion.current');
+    await waitUntil(
+      () => rejection !== undefined,
+      'the rejection reaches the app'
+    );
+    expect(rejection.error).to.equal('too-many-requests');
+    received.length = 0;
+
+    ddp.socket.rawSocket.close();
+    await waitUntil(
+      () => sessionCount === 2 && ddp.status === 'connected',
+      'second session'
+    );
+    await waitUntil(
+      () =>
+        received.some(
+          ({ msg, name }) => msg === 'sub' && name === 'backendVersion.current'
+        ),
+      'the live subscription on the new session'
+    );
+    expect(
+      received.filter(
+        ({ msg, name }) =>
+          msg === 'sub' && name === 'people.currentUserContacts'
+      )
+    ).to.have.length(0);
   });
 
   it('keeps restoring subscriptions behind the resume login when a token is stored', async function () {

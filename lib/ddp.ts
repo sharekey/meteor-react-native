@@ -371,6 +371,13 @@ class DDP extends EventEmitter<DDPEventMap> {
           }
         }
 
+        if (message.msg === 'nosub') {
+          // The server holds no subscription with this id any more, for example after rejecting it with a rate
+          // limit. Meteor.ts ends it for the app, so replaying it after a reconnect would recreate a subscription
+          // that nobody tracks or can stop.
+          this.activeSubs.delete(message.id);
+        }
+
         if (this.isVerbose) {
           if (
             message.msg === 'ready' ||
