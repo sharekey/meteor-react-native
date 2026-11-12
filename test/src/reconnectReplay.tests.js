@@ -4,6 +4,9 @@ import Meteor from '../../src/index';
 import { endpoint, awaitDisconnected } from '../testHelpers';
 import { server } from '../hooks/mockServer';
 
+// Long enough for a second copy of a message to reach the mock server.
+const settle = () => new Promise((resolve) => setTimeout(resolve, 30));
+
 const waitUntil = async (predicate, description, timeoutMs = 700) => {
   const startedAt = Date.now();
   while (!predicate()) {
@@ -19,6 +22,8 @@ describe('Meteor - replay after reconnecting on a new session', function () {
   let sessionCount;
   let answerDelays;
   let rejectedSubs;
+  let loginRequired;
+  let loggedInSockets;
 
   const connect = (storedToken) => {
     Meteor.connect(endpoint, {
@@ -38,9 +43,13 @@ describe('Meteor - replay after reconnecting on a new session', function () {
 
   // Queues a method exactly when the app does: socket down, reconnect pending.
   const dropSocketAndCallDuringReconnect = async (ddp, method) => {
+    let answer;
+    const answered = new Promise((resolve) => {
+      answer = resolve;
+    });
     const queued = new Promise((resolve) => {
       ddp.once('disconnected', () => {
-        Meteor.call(method, {}, () => {});
+        Meteor.call(method, {}, (error, result) => answer({ error, result }));
         resolve();
       });
     });
@@ -48,6 +57,7 @@ describe('Meteor - replay after reconnecting on a new session', function () {
     ddp.socket.rawSocket.close();
     await queued;
     expect(ddp.status).to.equal('disconnected');
+    return { answered };
   };
 
   const methodNames = () =>
@@ -58,6 +68,8 @@ describe('Meteor - replay after reconnecting on a new session', function () {
     sessionCount = 0;
     answerDelays = new Map();
     rejectedSubs = new Set();
+    loginRequired = new Set();
+    loggedInSockets = new WeakSet();
 
     server().message((data, _server, socket) => {
       const message = JSON.parse(data);
@@ -92,16 +104,38 @@ describe('Meteor - replay after reconnecting on a new session', function () {
 
       if (message.msg === 'method') {
         const isLogin = message.method === 'login';
-        const answer = () =>
+        // The backend refuses these on a session that has no login result yet.
+        const refused =
+          loginRequired.has(message.method) && !loggedInSockets.has(socket);
+        const answer = () => {
+          if (isLogin) loggedInSockets.add(socket);
           socket.send(
-            JSON.stringify({
-              msg: 'result',
-              id: message.id,
-              result: isLogin
-                ? { id: 'user', token: 'token', tokenExpires: { $date: 1 } }
-                : 'ok',
-            })
+            JSON.stringify(
+              refused
+                ? {
+                    msg: 'result',
+                    id: message.id,
+                    error: {
+                      isClientSafe: true,
+                      error: 'not-authorized',
+                      reason: 'User not authorized',
+                      errorType: 'Meteor.Error',
+                    },
+                  }
+                : {
+                    msg: 'result',
+                    id: message.id,
+                    result: isLogin
+                      ? {
+                          id: 'user',
+                          token: 'token',
+                          tokenExpires: { $date: 1 },
+                        }
+                      : 'ok',
+                  }
+            )
           );
+        };
 
         const delay = answerDelays.get(message.method);
         if (delay) {
@@ -125,17 +159,46 @@ describe('Meteor - replay after reconnecting on a new session', function () {
       'first session'
     );
 
-    await dropSocketAndCallDuringReconnect(ddp, 'auth.createRandomChallenge');
+    const { answered } = await dropSocketAndCallDuringReconnect(
+      ddp,
+      'auth.createRandomChallenge'
+    );
     await waitUntil(
       () => sessionCount === 2 && ddp.status === 'connected',
       'second session'
     );
 
+    const { error, result } = await answered;
+    expect(error).to.equal(undefined);
+    expect(result).to.equal('ok');
+    await settle();
+    expect(methodNames()).to.deep.equal(['auth.createRandomChallenge']);
+  });
+
+  // M-3494: a deep-link lookup queued while the app was in the background went out before the resume login on the
+  // new session, and the backend refused it with not-authorized.
+  it('sends a method queued while reconnecting after the resume login result', async function () {
+    const method = 'people.user.getByPID';
+    loginRequired.add(method);
+    const ddp = connect('stored-token');
     await waitUntil(
-      () => methodNames().includes('auth.createRandomChallenge'),
-      'the queued method on the new session'
+      () => methodNames().includes('login'),
+      'first resume login'
     );
-    expect(methodNames()).to.not.include('login');
+    await waitUntil(
+      () => ddp.shouldReplayActionsOnLogin === false,
+      'first login result'
+    );
+    received.length = 0;
+    answerDelays.set('login', 30);
+
+    const { answered } = await dropSocketAndCallDuringReconnect(ddp, method);
+
+    const { error, result } = await answered;
+    expect(error).to.equal(undefined);
+    expect(result).to.equal('ok');
+    await settle();
+    expect(methodNames()).to.deep.equal(['login', method]);
   });
 
   it('restores active subscriptions when no login token is stored', async function () {
@@ -256,27 +319,31 @@ describe('Meteor - replay after reconnecting on a new session', function () {
   const timesSent = (method) =>
     methodNames().filter((name) => name === method).length;
 
-  it('does not send a method twice when it goes out before the token is read', async function () {
+  it('sends a method called before the token is read once', async function () {
     const method = 'auth.sendEmailCode';
     answerDelays.set(method, 30);
 
     const ddp = connect(null);
-    await callOnConnected(ddp, method);
+    const error = await callOnConnected(ddp, method);
 
+    expect(error).to.equal(undefined);
     expect(ddp.shouldReplayActionsOnLogin).to.equal(false);
+    await settle();
     expect(timesSent(method)).to.equal(1);
   });
 
-  it('does not send a method twice when it goes out before the login result', async function () {
+  it('sends a method called before the login result once, after that result', async function () {
     const method = 'auth.sendEmailCode';
+    loginRequired.add(method);
     answerDelays.set('login', 30);
     answerDelays.set(method, 60);
 
     const ddp = connect('stored-token');
-    await callOnConnected(ddp, method);
+    const error = await callOnConnected(ddp, method);
 
+    expect(error).to.equal(undefined);
     expect(ddp.shouldReplayActionsOnLogin).to.equal(false);
-    expect(timesSent(method)).to.equal(1);
-    expect(methodNames()).to.include('login');
+    await settle();
+    expect(methodNames()).to.deep.equal(['login', method]);
   });
 });

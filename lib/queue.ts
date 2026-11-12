@@ -6,6 +6,13 @@ interface QueueOptions {
 }
 
 /**
+ * What the consumer did with an element: `true` sent it, `false` cannot send
+ * anything now, so processing stops, and `'held'` keeps this element in place
+ * while the elements behind it may still go.
+ */
+export type ConsumerAck = boolean | 'held';
+
+/**
  * The internal message queue for the DDP protocol.
  */
 export default class Queue<T extends object = any> {
@@ -19,7 +26,8 @@ export default class Queue<T extends object = any> {
    *
    * It gets called with each element of the queue and its return value
    * serves as a ack, determining whether the element is removed or not from
-   * the queue, allowing then subsequent elements to be processed.
+   * the queue, allowing then subsequent elements to be processed. A held
+   * element stays in the queue without stopping the elements behind it.
    *
    * @constructor
    * @param {function} consumer function to be called when the next element in the queue is to be processed
@@ -27,7 +35,7 @@ export default class Queue<T extends object = any> {
    * @param isVerbose optional flag to enable logging
    */
   constructor(
-    private consumer: (element: T) => boolean,
+    private consumer: (element: T) => ConsumerAck,
     options: QueueOptions = {
       isVerbose: false,
     }
@@ -61,16 +69,20 @@ export default class Queue<T extends object = any> {
    * and passing each to the consumer.
    */
   process(): void {
-    if (this.queue.length !== 0) {
-      const current = this.queue[0]!;
+    let index = 0;
+    while (index < this.queue.length) {
+      const current = this.queue[index]!;
       this.log('DEQUEUE_ATTEMPT', current);
       const ack = this.consumer(current);
-      if (ack) {
-        this.queue.shift();
+      if (ack === 'held') {
+        this.log('DEQUEUE_HELD', current);
+        index += 1;
+      } else if (ack) {
+        this.queue.splice(index, 1);
         this.log('DEQUEUE_SUCCESS', current);
-        this.process();
       } else {
         this.log('DEQUEUE_FAILED', current);
+        return;
       }
     }
   }
