@@ -345,6 +345,10 @@ const Meteor: MeteorBase = {
       // Fail pending method calls so they don't hang across reconnects (e.g., login)
       if (Data.calls.length) {
         const pendingCalls = Data.calls.splice(0, Data.calls.length);
+        // A call still in the queue was never sent. It fails here, so it must not reach the server after the
+        // reconnect: the app may already have shown the error or called it again. Dropped before the callbacks,
+        // so a call made again from a callback is kept.
+        ddp.dropQueuedMethods(pendingCalls.map(({ id }) => id));
         const connectionError = {
           error: 'connection-lost',
           reason: 'DDP disconnected',

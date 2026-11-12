@@ -57,4 +57,25 @@ describe('queue', function () {
     q.process();
     expect(consumed).to.deep.equal(['lookup', 'login']);
   });
+
+  it('removes matching elements without passing them to the consumer', function () {
+    const consumed = [];
+    let connected = false;
+    const q = new Queue((obj) => {
+      if (!connected) return false;
+      consumed.push(obj.id);
+      return true;
+    });
+
+    q.push({ id: 'lookup' });
+    q.push({ id: 'send' });
+    q.push({ id: 'list' });
+    const removed = q.remove(({ id }) => id !== 'send');
+    expect(removed.map(({ id }) => id)).to.deep.equal(['lookup', 'list']);
+    expect(q.remove(() => false)).to.deep.equal([]);
+
+    connected = true;
+    q.process();
+    expect(consumed).to.deep.equal(['send']);
+  });
 });
