@@ -24,6 +24,7 @@ describe('Meteor - replay after reconnecting on a new session', function () {
   let rejectedSubs;
   let loginRequired;
   let loggedInSockets;
+  let refusedConnections;
 
   const connect = (storedToken) => {
     Meteor.connect(endpoint, {
@@ -70,6 +71,14 @@ describe('Meteor - replay after reconnecting on a new session', function () {
     rejectedSubs = new Set();
     loginRequired = new Set();
     loggedInSockets = new WeakSet();
+    refusedConnections = 0;
+
+    // A refused connection fails with error and close and no open, as when the host is unreachable.
+    server().options.verifyClient = () => {
+      if (refusedConnections === 0) return true;
+      refusedConnections -= 1;
+      return false;
+    };
 
     server().message((data, _server, socket) => {
       const message = JSON.parse(data);
@@ -108,6 +117,8 @@ describe('Meteor - replay after reconnecting on a new session', function () {
         const refused =
           loginRequired.has(message.method) && !loggedInSockets.has(socket);
         const answer = () => {
+          // mock-socket would still deliver it to the closed client, which a real socket never does.
+          if (socket.readyState !== WebSocket.OPEN) return;
           if (isLogin) loggedInSockets.add(socket);
           socket.send(
             JSON.stringify(
@@ -148,6 +159,7 @@ describe('Meteor - replay after reconnecting on a new session', function () {
   });
 
   afterEach(async function () {
+    server().options.verifyClient = null;
     server().message(null);
     await awaitDisconnected();
   });
@@ -199,6 +211,143 @@ describe('Meteor - replay after reconnecting on a new session', function () {
     expect(result).to.equal('ok');
     await settle();
     expect(methodNames()).to.deep.equal(['login', method]);
+  });
+
+  // A method called while the socket is down waits in the queue. The next failed reconnect attempt fails its call
+  // with connection-lost, so the app may report the error or call it again.
+  const callAndFailOnRefusedReconnect = async (ddp, method) => {
+    refusedConnections = 1;
+    const callbacks = [];
+    const failed = new Promise((resolve) => {
+      ddp.once('disconnected', () => {
+        Meteor.call(method, {}, (error, result) => {
+          callbacks.push({ error, result });
+          resolve();
+        });
+      });
+    });
+
+    ddp.socket.rawSocket.close();
+    await failed;
+    expect(callbacks).to.have.length(1);
+    expect(callbacks[0].error.error).to.equal('connection-lost');
+    return callbacks;
+  };
+
+  it('does not send a method that failed with connection-lost before it was sent', async function () {
+    const method = 'messages.send';
+    const ddp = connect('stored-token');
+    await waitUntil(
+      () => methodNames().includes('login'),
+      'first resume login'
+    );
+    await waitUntil(
+      () => ddp.shouldReplayActionsOnLogin === false,
+      'first login result'
+    );
+    received.length = 0;
+
+    const callbacks = await callAndFailOnRefusedReconnect(ddp, method);
+    await waitUntil(
+      () => sessionCount === 2 && ddp.shouldReplayActionsOnLogin === false,
+      'login result on the next session'
+    );
+    await settle();
+
+    expect(methodNames()).to.deep.equal(['login']);
+    expect(callbacks).to.have.length(1);
+  });
+
+  it('does not send a method that failed with connection-lost when no login token is stored', async function () {
+    const method = 'auth.createRandomChallenge';
+    const ddp = connect(null);
+    await waitUntil(
+      () => sessionCount === 1 && ddp.status === 'connected',
+      'first session'
+    );
+
+    const callbacks = await callAndFailOnRefusedReconnect(ddp, method);
+    await waitUntil(
+      () => sessionCount === 2 && ddp.status === 'connected',
+      'second session'
+    );
+    await settle();
+
+    expect(methodNames()).to.deep.equal([]);
+    expect(callbacks).to.have.length(1);
+  });
+
+  it('runs a method called again after connection-lost once', async function () {
+    const method = 'messages.send';
+    const ddp = connect('stored-token');
+    await waitUntil(
+      () => methodNames().includes('login'),
+      'first resume login'
+    );
+    await waitUntil(
+      () => ddp.shouldReplayActionsOnLogin === false,
+      'first login result'
+    );
+    received.length = 0;
+    refusedConnections = 1;
+
+    let answerRetry;
+    const retryAnswered = new Promise((resolve) => {
+      answerRetry = resolve;
+    });
+    const failed = new Promise((resolve) => {
+      ddp.once('disconnected', () => {
+        Meteor.call(method, {}, (error) => {
+          resolve(error);
+          // What an app does with a call that failed before it was sent.
+          Meteor.call(method, {}, (retryError, result) =>
+            answerRetry({ retryError, result })
+          );
+        });
+      });
+    });
+
+    ddp.socket.rawSocket.close();
+    const error = await failed;
+    expect(error.error).to.equal('connection-lost');
+
+    const { retryError, result } = await retryAnswered;
+    expect(retryError).to.equal(undefined);
+    expect(result).to.equal('ok');
+    await settle();
+    expect(methodNames()).to.deep.equal(['login', method]);
+  });
+
+  it('does not send a method held for the login result after the socket drops', async function () {
+    const method = 'people.user.getByPID';
+    answerDelays.set('login', 100);
+    const ddp = connect('stored-token');
+    await waitUntil(
+      () => methodNames().includes('login'),
+      'first resume login'
+    );
+
+    const callbacks = [];
+    Meteor.call(method, {}, (error, result) =>
+      callbacks.push({ error, result })
+    );
+    expect(ddp.shouldReplayActionsOnLogin).to.equal(true);
+    answerDelays.delete('login');
+
+    ddp.socket.rawSocket.close();
+    await waitUntil(() => callbacks.length === 1, 'the call fails');
+    expect(callbacks[0].error.error).to.equal('connection-lost');
+    await waitUntil(
+      () => sessionCount === 2 && ddp.shouldReplayActionsOnLogin === false,
+      'login result on the next session'
+    );
+    await settle();
+    expect(methodNames()).to.deep.equal(['login', 'login']);
+
+    // The first login failed with connection-lost too and retries after 500 ms unless a login succeeded by then.
+    await new Promise((resolve) => setTimeout(resolve, 550));
+    expect(methodNames()).to.deep.equal(['login', 'login']);
+    expect(callbacks).to.have.length(1);
   });
 
   it('restores active subscriptions when no login token is stored', async function () {

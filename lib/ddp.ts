@@ -559,6 +559,23 @@ class DDP extends EventEmitter<DDPEventMap> {
     return id;
   }
 
+  /**
+   * Removes the methods with these ids that are still in the queue, so they
+   * are never sent. A method the caller already reported as failed must not
+   * reach the server later: the app may have shown the error or called it
+   * again. Methods already sent are not affected.
+   * @param ids method ids as returned by `method`
+   * @returns the ids of the removed methods
+   */
+  dropQueuedMethods(ids: Iterable<string>): string[] {
+    const dropping = new Set(ids);
+    if (!dropping.size) return [];
+
+    return this.messageQueue
+      .remove((message) => message.msg === 'method' && dropping.has(message.id))
+      .map(({ id }) => id);
+  }
+
   private trackSentMessage(message: any) {
     if (message.msg === 'method') {
       this.pendingMethods.set(message.id, message);

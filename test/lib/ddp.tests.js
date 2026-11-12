@@ -360,6 +360,26 @@ describe('ddp', function () {
       ddp.socket.emit('message:in', { msg: 'connected', session: 's1' });
       expect(sentIds()).to.deep.equal([lookupId]);
     });
+
+    it('never sends a queued method dropped by id', function () {
+      const failedId = ddp.method('people.user.getByPID', []);
+      const keptId = ddp.method('channels.list', []);
+      const subId = ddp.sub('backendVersion.current', []);
+      expect(ddp.dropQueuedMethods([failedId, subId, 'unknown'])).to.deep.equal(
+        [failedId]
+      );
+
+      ddp.socket.emit('message:in', { msg: 'connected', session: 's1' });
+      ddp.releaseDeferredReplay();
+      expect([...sentIds()].sort()).to.deep.equal([keptId, subId].sort());
+    });
+
+    it('does not drop a method already sent', function () {
+      ddp.socket.emit('message:in', { msg: 'connected', session: 's1' });
+      const loginId = ddp.method('login', [{ resume: 'token' }]);
+      expect(sentIds()).to.deep.equal([loginId]);
+      expect(ddp.dropQueuedMethods([loginId])).to.deep.equal([]);
+    });
   });
   describe('logging', function () {
     it('updates logging options at runtime', function (done) {

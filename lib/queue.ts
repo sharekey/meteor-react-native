@@ -102,6 +102,18 @@ export default class Queue<T extends object = any> {
   }
 
   /**
+   * Removes the elements that match without passing them to the consumer.
+   * @returns the removed elements, in queue order
+   */
+  remove(predicate: (element: T) => boolean): T[] {
+    const removed = this.queue.filter(predicate);
+    if (!removed.length) return removed;
+    this.queue = this.queue.filter((element) => !predicate(element));
+    removed.forEach((element) => this.log('DEQUEUE_DROPPED', element));
+    return removed;
+  }
+
+  /**
    * Clears all elements from the queue
    */
   empty(): void {
