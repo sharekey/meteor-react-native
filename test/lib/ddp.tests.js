@@ -292,6 +292,75 @@ describe('ddp', function () {
       });
     });
   });
+  describe('waiting for the login result on a new session', function () {
+    let sent;
+    const sentIds = () => sent.map(({ id }) => id);
+
+    beforeEach(function () {
+      ddp = new DDP({
+        ...validOptions,
+        autoConnect: false,
+        autoReconnect: false,
+        deferReplayUntilLogin: true,
+      });
+      sent = [];
+      ddp.socket.send = (message) => sent.push(message);
+    });
+
+    it('sends a login queued behind the messages it holds', function () {
+      const lookupId = ddp.method('people.user.getByPID', []);
+      const subId = ddp.sub('backendVersion.current', []);
+      const loginId = ddp.method('login', [{ resume: 'token' }]);
+
+      ddp.socket.emit('message:in', { msg: 'connected', session: 's1' });
+      expect(sentIds()).to.deep.equal([loginId]);
+
+      const lateId = ddp.method('channels.list', []);
+      expect(sentIds()).to.deep.equal([loginId]);
+
+      ddp.socket.emit('message:in', { msg: 'result', id: loginId, result: {} });
+      expect(sentIds()[0]).to.equal(loginId);
+      expect([...sentIds()].sort()).to.deep.equal(
+        [loginId, lookupId, subId, lateId].sort()
+      );
+    });
+
+    it('sends a login pushed while the hold is on', function () {
+      const lookupId = ddp.method('people.user.getByPID', []);
+      ddp.socket.emit('message:in', { msg: 'connected', session: 's1' });
+      expect(sent).to.have.length(0);
+
+      const loginId = ddp.method('login', [{ resume: 'token' }]);
+      expect(sentIds()).to.deep.equal([loginId]);
+
+      ddp.socket.emit('message:in', {
+        msg: 'result',
+        id: loginId,
+        error: { error: 403 },
+      });
+      expect(sentIds()).to.deep.equal([loginId, lookupId]);
+    });
+
+    it('sends the held messages when the hold is released without a login', function () {
+      const challengeId = ddp.method('auth.createRandomChallenge', []);
+      const subId = ddp.sub('backendVersion.current', []);
+      ddp.socket.emit('message:in', { msg: 'connected', session: 's1' });
+      expect(sent).to.have.length(0);
+
+      ddp.releaseDeferredReplay();
+      expect([...sentIds()].sort()).to.deep.equal([challengeId, subId].sort());
+    });
+
+    it('sends queued messages at once on a reused session', function () {
+      ddp.socket.emit('message:in', { msg: 'connected', session: 's1' });
+      ddp.releaseDeferredReplay();
+      ddp.socket.emit('close');
+      const lookupId = ddp.method('people.user.getByPID', []);
+
+      ddp.socket.emit('message:in', { msg: 'connected', session: 's1' });
+      expect(sentIds()).to.deep.equal([lookupId]);
+    });
+  });
   describe('logging', function () {
     it('updates logging options at runtime', function (done) {
       const logs = [];

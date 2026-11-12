@@ -95,6 +95,9 @@ type DDPLoggingOptions = Pick<DDPOptions, 'logger' | 'isPrivate' | 'isVerbose'>;
  */
 const DEFAULT_RECONNECT_INTERVAL = 1500;
 
+const isLoginMethod = (message: any): boolean =>
+  message.msg === 'method' && message.method === 'login';
+
 /**
  * Internal interface for event handling.
  * By default, it adds listeners to all public events
@@ -204,6 +207,8 @@ class DDP extends EventEmitter<DDPEventMap> {
   socket: Socket;
   endpoint: string;
   deferReplayUntilLogin: boolean;
+  // On a new session with `deferReplayUntilLogin`: only `login` leaves the queue
+  // until its result or `releaseDeferredReplay` ends the hold.
   shouldReplayActionsOnLogin: boolean;
   private activeSubs: Map<string, { name: string; params: any }>;
   private pendingMethods: Map<string, any>;
@@ -249,13 +254,21 @@ class DDP extends EventEmitter<DDPEventMap> {
 
     this.messageQueue = new Queue(
       (message) => {
-        if (this.status === 'connected') {
-          this.trackSentMessage(message);
-          this.socket.send(message);
-          return true;
-        } else {
-          return false;
+        if (this.status !== 'connected') return false;
+        // The server would run these as an anonymous user and refuse them.
+        if (this.shouldReplayActionsOnLogin && !isLoginMethod(message)) {
+          return 'held';
         }
+        // The replay already restored this queued subscription on this session.
+        if (
+          message.msg === 'sub' &&
+          this.sentOnCurrentSession.has(message.id)
+        ) {
+          return true;
+        }
+        this.trackSentMessage(message);
+        this.socket.send(message);
+        return true;
       },
       {
         logger: this.logger,
@@ -348,8 +361,10 @@ class DDP extends EventEmitter<DDPEventMap> {
         this.shouldReplayActionsOnLogin = waitForLoginReplay;
         if (!this.shouldReplayActionsOnLogin) {
           this.requeueActiveMessages();
-          this.messageQueue.process();
         }
+        // During the hold this sends only a `login` queued while disconnected:
+        // the resume on this session sends none while that one is in flight.
+        this.messageQueue.process();
 
         this.emit('connected', { sessionReused });
       } else if (message.msg === 'ping') {
@@ -561,9 +576,10 @@ class DDP extends EventEmitter<DDPEventMap> {
   }
 
   /**
-   * Sends what `deferReplayUntilLogin` held back on a new session. A `login`
-   * result normally ends the hold, so whoever decides not to send `login` must
-   * call this, or queued messages wait until something else is pushed.
+   * Sends what `deferReplayUntilLogin` held back on a new session: the replay
+   * and every queued message except `login`. A `login` result normally ends
+   * the hold, so whoever decides not to send `login` must call this, or the
+   * queue sends nothing else on this session.
    */
   releaseDeferredReplay() {
     if (!this.shouldReplayActionsOnLogin || this.status !== 'connected') return;
